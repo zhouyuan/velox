@@ -40,13 +40,11 @@ sudo apt install -y \
   libgtest-dev \
   libgmock-dev \
   libevent-dev \
-  libprotobuf-dev \
   liblz4-dev \
   libzstd-dev \
   libre2-dev \
   libsnappy-dev \
-  liblzo2-dev \
-  protobuf-compiler
+  liblzo2-dev
 
 function run_and_time {
   time "$@"
@@ -109,7 +107,7 @@ function cmake_install {
     -DCMAKE_CXX_FLAGS="${COMPILER_FLAGS}" \
     -DBUILD_TESTING=OFF \
     "$@"
-  ninja -C "${BINARY_DIR}" install
+  sudo ninja -C "${BINARY_DIR}" install
 }
 
 function install_fmt {
@@ -122,8 +120,15 @@ function install_folly {
   cmake_install -DBUILD_TESTS=OFF
 }
 
+function install_pb {
+  github_checkout protobuffers/protobuf v3.13.0
+  cmake_install
+}
+
 function install_velox_deps {
   run_and_time install_fmt
+  # pb must be installed before folly
+  run_and_time install_pb
   run_and_time install_folly
 }
 
