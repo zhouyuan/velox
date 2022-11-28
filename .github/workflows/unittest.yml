@@ -23,4 +23,4 @@ jobs:
         run: |
           git submodule sync --recursive && git submodule update --init --recursive
           ./scripts/setup-ubuntu.sh 
-          make
+          make release EXTRA_CMAKE_FLAGS="-DVELOX_ENABLE_ARROW=ON"
