@@ -22,4 +22,5 @@ jobs:
       - name: Compile C++ unit tests
         run: |
           git submodule sync --recursive && git submodule update --init --recursive
+          ./scripts/setup-ubuntu.sh 
           make
