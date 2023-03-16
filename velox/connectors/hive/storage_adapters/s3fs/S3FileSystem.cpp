@@ -21,48 +21,45 @@
 
 #include <fmt/format.h>
 #include <glog/logging.h>
+#include <fstream>
 #include <memory>
 #include <stdexcept>
 
 #include <aws/core/Aws.h>
 #include <aws/core/auth/AWSCredentialsProviderChain.h>
 #include <aws/core/http/HttpResponse.h>
+#include <aws/core/utils/StringUtils.h>
 #include <aws/core/utils/logging/ConsoleLogSystem.h>
+#include <aws/core/utils/memory/AWSMemory.h>
+#include <aws/core/utils/memory/stl/AWSStreamFwd.h>
 #include <aws/core/utils/stream/PreallocatedStreamBuf.h>
+#include <aws/core/utils/threading/Executor.h>
 #include <aws/identity-management/auth/STSAssumeRoleCredentialsProvider.h>
-#include <aws/s3/S3Client.h>
-#include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/HeadObjectRequest.h>
+#include <aws/transfer/TransferHandle.h>
+#include <aws/transfer/TransferManager.h>
 
 namespace facebook::velox {
 namespace {
-// Reference: https://issues.apache.org/jira/browse/ARROW-8692
-// https://github.com/apache/arrow/blob/master/cpp/src/arrow/filesystem/s3fs.cc#L843
-// A non-copying iostream. See
-// https://stackoverflow.com/questions/35322033/aws-c-sdk-uploadpart-times-out
-// https://stackoverflow.com/questions/13059091/creating-an-input-stream-from-constant-memory
-class StringViewStream : Aws::Utils::Stream::PreallocatedStreamBuf,
-                         public std::iostream {
- public:
-  StringViewStream(const void* data, int64_t nbytes)
-      : Aws::Utils::Stream::PreallocatedStreamBuf(
-            reinterpret_cast<unsigned char*>(const_cast<void*>(data)),
-            static_cast<size_t>(nbytes)),
-        std::iostream(this) {}
-};
 
 // By default, the AWS SDK reads object data into an auto-growing StringStream.
 // To avoid copies, read directly into a pre-allocated buffer instead.
 // See https://github.com/aws/aws-sdk-cpp/issues/64 for an alternative but
 // functionally similar recipe.
-Aws::IOStreamFactory AwsWriteableStreamFactory(void* data, int64_t nbytes) {
-  return [=]() { return Aws::New<StringViewStream>("", data, nbytes); };
-}
+class UnderlyingStreamWrapper : public Aws::IOStream {
+ public:
+  explicit UnderlyingStreamWrapper(std::streambuf* buf) : Aws::IOStream(buf) {}
+  ~UnderlyingStreamWrapper() override = default;
+};
 
 class S3ReadFile final : public ReadFile {
  public:
-  S3ReadFile(const std::string& path, Aws::S3::S3Client* client)
-      : client_(client) {
+  S3ReadFile(
+      const std::string& path,
+      const std::shared_ptr<Aws::S3::S3Client>& client,
+      const std::shared_ptr<Aws::Utils::Threading::PooledThreadExecutor>&
+          executor)
+      : client_(client), executor_(executor) {
     bucketAndKeyFromS3Path(path, bucket_, key_);
   }
 
@@ -151,30 +148,41 @@ class S3ReadFile final : public ReadFile {
   // bytes.
   void preadInternal(uint64_t offset, uint64_t length, char* position) const {
     // Read the desired range of bytes.
-    Aws::S3::Model::GetObjectRequest request;
-    Aws::S3::Model::GetObjectResult result;
-
-    request.SetBucket(awsString(bucket_));
-    request.SetKey(awsString(key_));
-    std::stringstream ss;
-    ss << "bytes=" << offset << "-" << offset + length - 1;
-    request.SetRange(awsString(ss.str()));
-    request.SetResponseStreamFactory(
-        AwsWriteableStreamFactory(position, length));
-    auto outcome = client_->GetObject(request);
-    VELOX_CHECK_AWS_OUTCOME(outcome, "Failed to get S3 object", bucket_, key_);
+    Aws::Transfer::TransferManagerConfiguration transferConfig(executor_.get());
+    transferConfig.s3Client = client_;
+    auto transferManager =
+        Aws::Transfer::TransferManager::Create(transferConfig);
+    Aws::Utils::Stream::PreallocatedStreamBuf streamBuffer(
+        (unsigned char*)position, length);
+    auto downloadHandle =
+        transferManager->DownloadFile(bucket_, key_, offset, length, [&]() {
+          return Aws::New<UnderlyingStreamWrapper>("TestTag", &streamBuffer);
+        });
+    downloadHandle->WaitUntilFinished();
+    if (downloadHandle->GetStatus() != Aws::Transfer::TransferStatus::COMPLETED)
+      VELOX_FAIL(
+          "{} from location: {}:{}",
+          "Failed to get S3 object using the transfer manager",
+          bucket_,
+          key_);
   }
 
-  Aws::S3::S3Client* client_;
+  std::shared_ptr<Aws::S3::S3Client> client_;
   std::string bucket_;
   std::string key_;
   int64_t length_ = -1;
+  const std::shared_ptr<Aws::Utils::Threading::PooledThreadExecutor>& executor_;
 };
+
 } // namespace
 
 namespace filesystems {
 
 class S3Config {
+ public: // Constants
+  static const char* kS3TransferManagerMaxThreadsConfig =
+      "hive.s3.transfer-manager-max-threads";
+
  public:
   S3Config(const Config* config) : config_(config) {}
 
@@ -222,6 +230,10 @@ class S3Config {
         "hive.s3.iam-role-session-name", std::string("velox-session"));
   }
 
+  int getTranferManagerMaxThreads() const {
+    return config_->get<int>(kS3TransferManagerMaxThreadsConfig, 25);
+  }
+
   Aws::Utils::Logging::LogLevel getLogLevel() const {
     auto level = config_->get("hive.s3.log-level", std::string("FATAL"));
     // Convert to upper case.
@@ -267,6 +279,9 @@ class S3FileSystem::Impl {
       // log a message.
       awsOptions.httpOptions.installSigPipeHandler = true;
       Aws::InitAPI(awsOptions);
+      S3FileSystem::Impl::executor_ =
+          std::make_shared<Aws::Utils::Threading::PooledThreadExecutor>(
+              s3Config_.getTranferManagerMaxThreads());
     }
   }
 
@@ -366,8 +381,17 @@ class S3FileSystem::Impl {
   // Make it clear that the S3FileSystem instance owns the S3Client.
   // Once the S3FileSystem is destroyed, the S3Client fails to work
   // due to the Aws::ShutdownAPI invocation in the destructor.
-  Aws::S3::S3Client* s3Client() const {
-    return client_.get();
+  const std::shared_ptr<Aws::S3::S3Client>& s3Client() const {
+    return client_;
+  }
+
+  const S3Config& s3Config() const {
+    return s3Config_;
+  }
+
+  const std::shared_ptr<Aws::Utils::Threading::PooledThreadExecutor>&
+  getExecutor() const {
+    return S3FileSystem::Impl::executor_;
   }
 
   std::string getLogLevelName() const {
@@ -378,9 +402,12 @@ class S3FileSystem::Impl {
   const S3Config s3Config_;
   std::shared_ptr<Aws::S3::S3Client> client_;
   static std::atomic<size_t> initCounter_;
+  static std::shared_ptr<Aws::Utils::Threading::PooledThreadExecutor> executor_;
 };
 
 std::atomic<size_t> S3FileSystem::Impl::initCounter_(0);
+std::shared_ptr<Aws::Utils::Threading::PooledThreadExecutor>
+    S3FileSystem::Impl::executor_(nullptr);
 folly::once_flag S3FSInstantiationFlag;
 
 S3FileSystem::S3FileSystem(std::shared_ptr<const Config> config)
@@ -400,7 +427,8 @@ std::unique_ptr<ReadFile> S3FileSystem::openFileForRead(
     std::string_view path,
     const FileOptions& /*unused*/) {
   const std::string file = s3Path(path);
-  auto s3file = std::make_unique<S3ReadFile>(file, impl_->s3Client());
+  auto s3file = std::make_unique<S3ReadFile>(
+      file, impl_->s3Client(), impl_->getExecutor());
   s3file->initialize();
   return s3file;
 }
