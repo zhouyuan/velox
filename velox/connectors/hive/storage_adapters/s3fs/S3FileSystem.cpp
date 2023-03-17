@@ -180,7 +180,7 @@ namespace filesystems {
 
 class S3Config {
  public: // Constants
-  static const char* kS3TransferManagerMaxThreadsConfig =
+  static constexpr const char* kS3TransferManagerMaxThreadsConfig =
       "hive.s3.transfer-manager-max-threads";
 
  public:
