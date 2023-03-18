@@ -38,6 +38,8 @@ class HiveConfig {
   /// Whether new data can be inserted into an unpartition table.
   /// Velox currently does not support appending data to existing partitions.
   static constexpr const char* kImmutablePartitions = "immutable_partitions";
+  /// Use ParallelBufferedInput to load split data.
+  static constexpr const char* kParallelLoadEnabled = "enable_parallel_load";
 
   static InsertExistingPartitionsBehavior insertExistingPartitionsBehavior(
       const Config* config);
@@ -47,6 +49,8 @@ class HiveConfig {
   static bool immutablePartitions(const Config* config);
 
   static constexpr const char* kCaseSensitive = "case_sensitive";
+
+  static bool parallelLoadEnabled(const Config* config);
 
   static bool isCaseSensitive(const Config* config);
 };

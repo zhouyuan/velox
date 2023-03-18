@@ -21,6 +21,7 @@
 #include "velox/connectors/hive/HiveDataSink.h"
 #include "velox/dwio/common/CachedBufferedInput.h"
 #include "velox/dwio/common/IoStatistics.h"
+#include "velox/dwio/common/ParallelBufferedInput.h"
 #include "velox/dwio/common/Reader.h"
 #include "velox/dwio/common/ScanSpec.h"
 #include "velox/dwio/dwrf/writer/Writer.h"
@@ -137,7 +138,8 @@ class HiveDataSource : public DataSource {
       memory::MemoryAllocator* FOLLY_NONNULL allocator,
       const std::string& scanId,
       bool caseSensitive,
-      folly::Executor* FOLLY_NULLABLE executor);
+      folly::Executor* FOLLY_NULLABLE executor,
+      const bool parallelLoadEnable);
 
   void addSplit(std::shared_ptr<ConnectorSplit> split) override;
 
@@ -232,6 +234,7 @@ class HiveDataSource : public DataSource {
   memory::MemoryAllocator* const FOLLY_NONNULL allocator_;
   const std::string& scanId_;
   folly::Executor* FOLLY_NULLABLE executor_;
+  const bool parallelLoadEnable_;
 };
 
 class HiveConnector final : public Connector {
@@ -262,7 +265,8 @@ class HiveConnector final : public Connector {
         connectorQueryCtx->allocator(),
         connectorQueryCtx->scanId(),
         HiveConfig::isCaseSensitive(connectorQueryCtx->config()),
-        executor_);
+        executor_,
+        HiveConfig::parallelLoadEnabled(connectorQueryCtx->config()));
   }
 
   bool supportsSplitPreload() override {
