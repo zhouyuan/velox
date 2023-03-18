@@ -26,6 +26,7 @@ add_library(
   BitConcatenation.cpp
   BitPackDecoder.cpp
   BufferedInput.cpp
+  ParallelBufferedInput.cpp
   CachedBufferedInput.cpp
   CacheInputStream.cpp
   ColumnSelector.cpp
