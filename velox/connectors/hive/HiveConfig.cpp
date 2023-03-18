@@ -61,4 +61,9 @@ bool HiveConfig::isCaseSensitive(const Config* config) {
   return config->get<bool>(kCaseSensitive, true);
 }
 
+// static
+bool HiveConfig::parallelLoadEnabled(const Config* config) {
+  return config->get<bool>(kParallelLoadEnabled, false);
+}
+
 } // namespace facebook::velox::connector::hive

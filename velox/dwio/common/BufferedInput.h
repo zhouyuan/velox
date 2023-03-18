@@ -124,11 +124,17 @@ class BufferedInput {
   std::shared_ptr<ReadFileInputStream> input_;
   memory::MemoryPool& pool_;
 
- private:
   std::vector<uint64_t> offsets_;
   std::vector<DataBuffer<char>> buffers_;
   std::vector<Region> regions_;
 
+  // We either load data parallelly or sequentially according to flag
+  void loadWithAction(
+      const LogType logType,
+      std::function<void(void* FOLLY_NONNULL, uint64_t, uint64_t, LogType)>
+          action);
+
+ private:
   std::unique_ptr<SeekableInputStream> readBuffer(
       uint64_t offset,
       uint64_t length) const;
@@ -150,12 +156,6 @@ class BufferedInput {
 
     buffers_.push_back(std::move(buffer));
   }
-
-  // we either load data parallelly or sequentially according to flag
-  void loadWithAction(
-      const LogType logType,
-      std::function<void(void* FOLLY_NONNULL, uint64_t, uint64_t, LogType)>
-          action);
 
   // tries and merges WS read regions into one
   bool tryMerge(Region& first, const Region& second);
