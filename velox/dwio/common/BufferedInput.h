@@ -24,7 +24,7 @@ namespace facebook::velox::dwio::common {
 
 class BufferedInput {
  public:
-  constexpr static uint64_t kMaxMergeDistance = 1024 * 1024 * 1.25;
+  constexpr static uint64_t kMaxMergeDistance = 0;
 
   BufferedInput(
       std::shared_ptr<ReadFile> readFile,

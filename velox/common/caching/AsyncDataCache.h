@@ -748,7 +748,7 @@ class AsyncDataCache : public memory::MemoryAllocator {
   }
 
  private:
-  static constexpr int32_t kNumShards = 4; // Must be power of 2.
+  static constexpr int32_t kNumShards = 16; // Must be power of 2.
   static constexpr int32_t kShardMask = kNumShards - 1;
 
   // Waits a pseudorandom delay times 'counter'.
