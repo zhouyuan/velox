@@ -27,14 +27,14 @@ jobs:
 
   gluten-test:
     runs-on: self-hosted
+    env:
+      PR_AUTHOR: ${{ github.event.pull_request.user.login }}
     steps:
       - name: Setup docker container
         run: |
-          git clone https://github.com/oap-project/gluten && cd gluten
-          BRANCH=$(echo ${GITHUB_REF#refs/heads/})
-          sed -i 's/oap-project/"${GITHUB_REPOSITORY_OWNER}"/g' ep/build-velox/src/get_velox.sh
-          sed -i 's/VELOX_BRANCH=main/VELOX_BRANCH="${BRANCH}"/g' ep/build-velox/src/get_velox.sh
-          head -n10 ep/build-velox/src/get_velox.sh
+          rm -rf gluten && git clone https://github.com/oap-project/gluten && cd gluten
+          sed -i "s/oap-project/${PR_AUTHOR}/g" ep/build-velox/src/get_velox.sh
+          sed -i "s/VELOX_BRANCH=main/VELOX_BRANCH=${GITHUB_HEAD_REF}/g" ep/build-velox/src/get_velox.sh
           EXTRA_DOCKER_OPTIONS="--name velox-backend-ubuntu2004-test-$GITHUB_RUN_ID -e NUM_THREADS=30 --detach" \
           NON_INTERACTIVE=ON \
           MOUNT_MAVEN_CACHE=OFF \
