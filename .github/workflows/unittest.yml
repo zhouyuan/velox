@@ -10,14 +10,17 @@ concurrency:
 jobs:
 
   velox-test:
-    runs-on: self-hosted
+    runs-on: ubuntu-20.04
+    container: inteldpo/velox:latest
     steps:
+      - run: unset https_proxy
+      - run: unset http_proxy
       - uses: actions/checkout@v2
       - run: sudo apt-get update
       - run: sudo apt-get install -y cmake ccache build-essential
       - run: sudo apt-get install -y maven
       - run: sudo apt-get install -y libboost-all-dev libcurl4-openssl-dev
-      - run: sudo apt-get install -y libssl-dev
+      - run: sudo apt-get install -y libssl-dev flex libfl-dev
       - run: sudo apt-get install -y libz-dev
       - name: Compile C++ unit tests
         run: |
