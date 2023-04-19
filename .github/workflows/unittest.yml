@@ -11,19 +11,21 @@ jobs:
 
   velox-test:
     runs-on: self-hosted
+    container: ubuntu:22.04
     steps:
       - uses: actions/checkout@v2
-      - run: sudo apt-get update
-      - run: sudo apt-get install -y cmake ccache build-essential
-      - run: sudo apt-get install -y maven
-      - run: sudo apt-get install -y libboost-all-dev libcurl4-openssl-dev
-      - run: sudo apt-get install -y libssl-dev
-      - run: sudo apt-get install -y libz-dev
+      - run: apt-get update
+      - run: apt-get install -y cmake ccache build-essential ninja-build sudo
+      - run: apt-get install -y maven
+      - run: apt-get install -y libboost-all-dev libcurl4-openssl-dev
+      - run: apt-get install -y libssl-dev flex libfl-dev git libprotobuf-dev
+      - run: apt-get install -y libz-dev
       - name: Compile C++ unit tests
         run: |
           git submodule sync --recursive && git submodule update --init --recursive
           ./scripts/setup-ubuntu.sh 
-          make release EXTRA_CMAKE_FLAGS="-DVELOX_ENABLE_ARROW=ON"
+          make release EXTRA_CMAKE_FLAGS="-DVELOX_ENABLE_PARQUET=ON -DVELOX_BUILD_TESTING=ON -DVELOX_BUILD_TEST_UTILS=ON -DVELOX_ENABLE_ARROW=ON"
+          cd _build/release && ctest -V --output-on-failure
 
   formatting-check:
     name: Formatting Check

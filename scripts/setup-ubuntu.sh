@@ -27,9 +27,11 @@ FB_OS_VERSION=v2022.11.14.00
 NPROC=$(getconf _NPROCESSORS_ONLN)
 DEPENDENCY_DIR=${DEPENDENCY_DIR:-$(pwd)}
 export CMAKE_BUILD_TYPE=Release
+export TZ=America/New_York
+export DEBIAN_FRONTEND=noninteractive
 
 # Install all velox and folly dependencies.
-sudo --preserve-env apt update && sudo apt install -y \
+apt install -y \
   g++ \
   cmake \
   ccache \
