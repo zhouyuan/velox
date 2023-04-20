@@ -77,6 +77,11 @@ function prompt {
   ) 2> /dev/null
 }
 
+function install_pb {
+  github_checkout protocolbuffers/protobuf v3.21.4
+  cmake_install -Dprotobuf_BUILD_TESTS=OFF -DFMT_TEST=OFF
+}
+
 function install_fmt {
   github_checkout fmtlib/fmt 8.0.1
   cmake_install -DFMT_TEST=OFF
@@ -96,6 +101,7 @@ function install_conda {
 
 function install_velox_deps {
   run_and_time install_fmt
+  run_and_time install_pb
   run_and_time install_folly
   run_and_time install_conda
 }
