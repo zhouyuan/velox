@@ -24,8 +24,8 @@ jobs:
         run: |
           git submodule sync --recursive && git submodule update --init --recursive
           ./scripts/setup-ubuntu.sh 
-          make release EXTRA_CMAKE_FLAGS="-DVELOX_ENABLE_PARQUET=ON -DVELOX_BUILD_TESTING=ON -DVELOX_BUILD_TEST_UTILS=ON -DVELOX_ENABLE_ARROW=ON"
-          cd _build/release && ctest -V --output-on-failure
+          make debug EXTRA_CMAKE_FLAGS="-DVELOX_ENABLE_PARQUET=ON -DVELOX_BUILD_TESTING=ON -DVELOX_BUILD_TEST_UTILS=ON -DVELOX_ENABLE_ARROW=ON"
+          cd _build/release && ctest -j16 -VV --output-on-failure
 
   formatting-check:
     name: Formatting Check
