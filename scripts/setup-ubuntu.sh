@@ -55,7 +55,12 @@ apt install -y \
   bison \
   flex \
   tzdata \
-  wget
+  wget \
+  *thrift* \
+  libkrb5-dev \
+  libgsasl7-dev \
+  libuuid1 \
+  uuid-dev
 
 function run_and_time {
   time "$@"
