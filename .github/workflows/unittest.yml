@@ -24,6 +24,7 @@ jobs:
         run: |
           git submodule sync --recursive && git submodule update --init --recursive
           ./scripts/setup-ubuntu.sh 
+          ./scripts/setup-adapters.sh 
           make debug EXTRA_CMAKE_FLAGS="-DVELOX_ENABLE_PARQUET=ON -DVELOX_BUILD_TESTING=ON -DVELOX_BUILD_TEST_UTILS=ON -DVELOX_ENABLE_ARROW=ON"
           # disable failed tests temporary
           rm ./_build/release/velox/type/tests/velox_type_test
