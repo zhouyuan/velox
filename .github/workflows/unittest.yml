@@ -26,38 +26,7 @@ jobs:
           ./scripts/setup-ubuntu.sh 
           ./scripts/setup-adapters.sh 
           make debug EXTRA_CMAKE_FLAGS="-DVELOX_ENABLE_PARQUET=ON -DVELOX_BUILD_TESTING=ON -DVELOX_BUILD_TEST_UTILS=ON -DVELOX_ENABLE_ARROW=ON"
-          # disable failed tests temporary
-          # disable failed tests temporary, will need to restore if fixed
-          rm -f ./_build/debug/velox/type/tests/velox_type_test
-          rm -f ./_build/debug/velox/dwio/common/tests/velox_dwio_common_test
-          rm -f ./_build/debug/velox/dwio/dwrf/test/velox_dwrf_e2e_filter_test
-          rm -f ./_build/debug/velox/dwio/parquet/tests/reader/velox_parquet_e2e_filter_test
-          rm -f ./_build/debug/velox/functions/prestosql/window/tests/velox_windows_rank_test
-          rm -f ./_build/debug/velox/functions/prestosql/aggregates/tests/velox_aggregates_test
-          rm -f ./_build/debug/velox/functions/prestosql/tests/velox_functions_test
-          rm -f ./_build/debug/velox/functions/sparksql/aggregates/tests/velox_functions_spark_aggregates_test
-          rm -f ./_build/debug/velox/functions/sparksql/tests/velox_functions_spark_test
-          rm -f ./_build/debug/velox/connectors/hive/tests/velox_hive_connector_test
-          rm -f ./_build/debug/velox/exec/tests/velox_exec_test
-          rm -f ./_build/debug/velox/substrait/tests/velox_plan_conversion_test
-          rm -f ./_build/debug/velox/connectors/hive/storage_adapters/s3fs/tests/velox_s3file_test
-          rm -f ./_build/debug/velox/connectors/hive/storage_adapters/hdfs/tests/velox_hdfs_file_test
-          rm ./_build/release/velox/type/tests/velox_type_test
-          rm ./_build/release/velox/dwio/common/tests/velox_dwio_common_test
-          rm ./_build/release/velox/dwio/dwrf/test/velox_dwrf_e2e_filter_test
-          rm ./_build/release/velox/dwio/parquet/tests/reader/velox_parquet_e2e_filter_test
-          rm ./_build/release/velox/functions/prestosql/window/tests/velox_windows_rank_test
-          rm ./_build/release/velox/functions/prestosql/aggregates/tests/velox_aggregates_test
-          rm ./_build/release/velox/functions/prestosql/tests/velox_functions_test
-          rm ./_build/release/velox/functions/sparksql/aggregates/tests/velox_functions_spark_aggregates_test
-          rm ./_build/release/velox/functions/sparksql/tests/velox_functions_spark_test
-          rm ./_build/release/velox/connectors/hive/tests/velox_hive_connector_test
-          rm ./_build/release/velox/exec/tests/velox_exec_test
-          rm ./_build/release/velox/substrait/tests/velox_plan_conversion_test
-          rm ./_build/release/velox/connectors/hive/storage_adapters/s3fs/tests/velox_s3file_test
-          rm ./_build/release/velox/connectors/hive/storage_adapters/hdfs/tests/velox_hdfs_file_test
-          rm -f ./_build/debug/velox/functions/prestosql/window/tests/velox_windows_value_test
-          cd _build/release && ctest -j16 -VV --output-on-failure
+          cd _build/debug && ctest -j16 -VV -E "(velox_type_test|velox_dwio_common_test|velox_dwrf_e2e_filter_test|velox_parquet_e2e_filter_test|velox_windows_rank_test|velox_aggregates_test|velox_functions_test|velox_functions_spark_aggregates_test|velox_functions_spark_test|velox_hive_connector_test|velox_exec_test|velox_plan_conversion_test|velox_s3file_test|velox_hdfs_file_test|velox_windows_value_test)" --output-on-failure
 
   formatting-check:
     name: Formatting Check
