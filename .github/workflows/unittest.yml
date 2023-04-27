@@ -18,8 +18,15 @@ jobs:
       - run: apt-get install -y cmake ccache build-essential ninja-build sudo
       - run: apt-get install -y maven
       - run: apt-get install -y libboost-all-dev libcurl4-openssl-dev
-      - run: apt-get install -y libssl-dev flex libfl-dev git libprotobuf-dev
+      - run: apt-get install -y libssl-dev flex libfl-dev git openjdk-8-jdk axel
       - run: apt-get install -y libz-dev
+      - run: |
+          axel https://dl.min.io/server/minio/release/linux-amd64/archive/minio_20220526054841.0.0_amd64.deb
+          dpkg -i minio_20220526054841.0.0_amd64.deb
+          rm minio_20220526054841.0.0_amd64.deb
+      - run: |
+          axel https://dlcdn.apache.org/hadoop/common/hadoop-2.10.1/hadoop-2.10.1.tar.gz
+          tar xf hadoop-2.10.1.tar.gz -C /usr/local/
       - name: Compile C++ unit tests
         run: |
           git submodule sync --recursive && git submodule update --init --recursive
@@ -43,7 +50,12 @@ jobs:
           #./_build/debug/velox/connectors/hive/storage_adapters/s3fs/tests/velox_s3file_test
           #./_build/debug/velox/connectors/hive/storage_adapters/hdfs/tests/velox_hdfs_file_test
           #./_build/debug/velox/functions/prestosql/window/tests/velox_windows_value_test
-          cd _build/debug && ctest -j16 -VV -E "(velox_type_test|velox_dwio_common_test|velox_dwrf_e2e_filter_test|velox_parquet_e2e_filter_test|velox_windows_rank_test|velox_aggregates_test|velox_functions_test|velox_functions_spark_aggregates_test|velox_functions_spark_test|velox_hive_connector_test|velox_exec_test|velox_plan_conversion_test|velox_s3file_test|velox_hdfs_file_test|velox_windows_value_test)" --output-on-failure
+          export JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk-amd64/
+          export HADOOP_ROOT_LOGGER="WARN,DRFA"
+          export LIBHDFS3_CONF=$(pwd)/.circleci/hdfs-client.xml
+          export HADOOP_HOME='/usr/local/hadoop-2.10.1'
+          export PATH=~/adapter-deps/install/bin:/usr/local/hadoop-2.10.1/bin:${PATH}
+          cd _build/debug && ctest -j16 -VV -E "(velox_type_test|velox_dwio_common_test|velox_dwrf_e2e_filter_test|velox_parquet_e2e_filter_test|velox_windows_rank_test|velox_aggregates_test|velox_functions_test|velox_functions_spark_aggregates_test|velox_functions_spark_test|velox_hive_connector_test|velox_exec_test|velox_plan_conversion_test|velox_windows_value_test|velox_s3file_test)" --output-on-failure
 
   formatting-check:
     name: Formatting Check
