@@ -27,11 +27,9 @@ FB_OS_VERSION=v2022.11.14.00
 NPROC=$(getconf _NPROCESSORS_ONLN)
 DEPENDENCY_DIR=${DEPENDENCY_DIR:-$(pwd)}
 export CMAKE_BUILD_TYPE=Release
-export TZ=America/New_York
-export DEBIAN_FRONTEND=noninteractive
 
 # Install all velox and folly dependencies.
-apt install -y \
+sudo --preserve-env apt update && sudo apt install -y \
   g++ \
   cmake \
   ccache \
@@ -55,12 +53,7 @@ apt install -y \
   bison \
   flex \
   tzdata \
-  wget \
-  *thrift* \
-  libkrb5-dev \
-  libgsasl7-dev \
-  libuuid1 \
-  uuid-dev
+  wget
 
 function run_and_time {
   time "$@"
@@ -81,7 +74,6 @@ function prompt {
     done
   ) 2> /dev/null
 }
-
 
 function install_fmt {
   github_checkout fmtlib/fmt 8.0.1
