@@ -108,7 +108,7 @@ function install_velox_deps {
   run_and_time install_fmt
   run_and_time install_pb
   run_and_time install_folly
-  #run_and_time install_conda
+  run_and_time install_conda
 }
 
 (return 2> /dev/null) && return # If script was sourced, don't run commands.
