@@ -25,7 +25,7 @@ namespace facebook::velox::functions::sparksql::aggregates {
 
 using velox::aggregate::LongDecimalWithOverflowState;
 
-template <typename TInputType, typename TResultType>
+template <typename TInputType, typename TSumResultType, typename TResultType>
 class DecimalAverageAggregate : public exec::Aggregate {
  public:
   explicit DecimalAverageAggregate(TypePtr inputType, TypePtr resultType)
@@ -264,7 +264,7 @@ class DecimalAverageAggregate : public exec::Aggregate {
   void extractAccumulators(char** groups, int32_t numGroups, VectorPtr* result)
       override {
     auto rowVector = (*result)->as<RowVector>();
-    auto sumVector = rowVector->childAt(0)->asFlatVector<TResultType>();
+    auto sumVector = rowVector->childAt(0)->asFlatVector<TSumResultType>();
     auto countVector = rowVector->childAt(1)->asFlatVector<int64_t>();
     rowVector->resize(numGroups);
     sumVector->resize(numGroups);
@@ -273,7 +273,7 @@ class DecimalAverageAggregate : public exec::Aggregate {
     uint64_t* rawNulls = getRawNulls(rowVector);
 
     int64_t* rawCounts = countVector->mutableRawValues();
-    TResultType* rawSums = sumVector->mutableRawValues();
+    TSumResultType* rawSums = sumVector->mutableRawValues();
 
     for (auto i = 0; i < numGroups; ++i) {
       char* group = groups[i];
@@ -283,10 +283,10 @@ class DecimalAverageAggregate : public exec::Aggregate {
         clearNull(rawNulls, i);
         auto* accumulator = decimalAccumulator(group);
         rawCounts[i] = accumulator->count;
-        if constexpr (std::is_same_v<TResultType, UnscaledShortDecimal>) {
-          rawSums[i] = TResultType((int64_t)accumulator->sum);
+        if constexpr (std::is_same_v<TSumResultType, UnscaledShortDecimal>) {
+          rawSums[i] = TSumResultType((int64_t)accumulator->sum);
         } else {
-          rawSums[i] = TResultType(accumulator->sum);
+          rawSums[i] = TSumResultType(accumulator->sum);
         }
       }
     }
@@ -500,20 +500,24 @@ bool registerDecimalAvgAggregate(const std::string& name) {
                 if (sumResultType->kind() == TypeKind::SHORT_DECIMAL) {
                   return std::make_unique<DecimalAverageAggregate<
                       UnscaledShortDecimal,
+                      UnscaledLongDecimal,
                       UnscaledShortDecimal>>(inputType, resultType);
                 } else {
                   return std::make_unique<DecimalAverageAggregate<
                       UnscaledShortDecimal,
+                      UnscaledLongDecimal,
                       UnscaledLongDecimal>>(inputType, resultType);
                 }
               }
               case TypeKind::SHORT_DECIMAL: // Complete
                 return std::make_unique<DecimalAverageAggregate<
                     UnscaledShortDecimal,
+                    UnscaledLongDecimal,
                     UnscaledShortDecimal>>(inputType, resultType);
               case TypeKind::LONG_DECIMAL: // Complete
                 return std::make_unique<DecimalAverageAggregate<
                     UnscaledShortDecimal,
+                    UnscaledLongDecimal,
                     UnscaledLongDecimal>>(inputType, resultType);
               default:
                 VELOX_FAIL(
@@ -529,6 +533,7 @@ bool registerDecimalAvgAggregate(const std::string& name) {
                 if (sumResultType->kind() == TypeKind::LONG_DECIMAL) {
                   return std::make_unique<DecimalAverageAggregate<
                       UnscaledLongDecimal,
+                      UnscaledLongDecimal,
                       UnscaledLongDecimal>>(inputType, resultType);
                 } else {
                   VELOX_FAIL(
@@ -538,6 +543,7 @@ bool registerDecimalAvgAggregate(const std::string& name) {
               }
               case TypeKind::LONG_DECIMAL: // Complete
                 return std::make_unique<DecimalAverageAggregate<
+                    UnscaledLongDecimal,
                     UnscaledLongDecimal,
                     UnscaledLongDecimal>>(inputType, resultType);
               default:
@@ -555,9 +561,11 @@ bool registerDecimalAvgAggregate(const std::string& name) {
                 if (resultType->kind() == TypeKind::SHORT_DECIMAL) {
                   return std::make_unique<DecimalAverageAggregate<
                       UnscaledLongDecimal,
+                      UnscaledLongDecimal,
                       UnscaledShortDecimal>>(sumInputType, resultType);
                 } else {
                   return std::make_unique<DecimalAverageAggregate<
+                      UnscaledLongDecimal,
                       UnscaledLongDecimal,
                       UnscaledLongDecimal>>(sumInputType, resultType);
                 }
