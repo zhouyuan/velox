@@ -102,6 +102,7 @@ RowVectorPtr TableScan::getOutput() {
       if (!dataSource_) {
         connectorQueryCtx_ = operatorCtx_->createConnectorQueryCtx(
             connectorSplit->connectorId, planNodeId(), connectorPool_);
+        std::cout << "AAA: create data source" << std::endl;
         dataSource_ = connector_->createDataSource(
             outputType_,
             tableHandle_,
