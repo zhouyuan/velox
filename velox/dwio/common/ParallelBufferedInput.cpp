@@ -96,7 +96,7 @@ void ParallelBufferedInput::loadParallel(
   DWIO_ENSURE_EQ(
       regions.size(), size, "mismatched size of regions and buffers");
 
-  if (size == 1) {
+  if (0) {
     const auto& region = regions[0];
     input_->read(buffers[0], region.length, region.offset, purpose);
   } else {
