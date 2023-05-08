@@ -71,7 +71,6 @@ void ParallelBufferedInput::splitRegion(
     const uint64_t length,
     const int32_t loadQuantum,
     std::vector<std::tuple<uint64_t, uint64_t>>& range) {
-  std::cout << "AAA: " << length << std::endl;
   uint64_t cursor = 0;
   while (cursor + loadQuantum < length) {
     range.emplace_back(cursor, loadQuantum);
