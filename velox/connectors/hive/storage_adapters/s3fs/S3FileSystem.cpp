@@ -33,6 +33,7 @@
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/HeadObjectRequest.h>
+#include <aws/s3/model/PutObjectRequest.h>
 
 namespace facebook::velox {
 namespace {
@@ -169,6 +170,35 @@ class S3ReadFile final : public ReadFile {
   std::string bucket_;
   std::string key_;
   int64_t length_ = -1;
+};
+
+class S3WriteFile final : public WriteFile {
+ public:
+  S3WriteFile(const std::string& path, Aws::S3::S3Client* client)
+      : client_(client) {
+    bucketAndKeyFromS3Path(path, bucket_, key_);
+  }
+
+  void initialize() {}
+
+  void append(std::string_view data) override {
+    if (data.size() == 0) {
+      return;
+    }
+    std::shared_ptr<Aws::IOStream> inputData =
+        Aws::MakeShared<Aws::StringStream>("");
+    *inputData << data.data();
+    Aws::S3::Model::PutObjectRequest request;
+    request.SetBucket(awsString(bucket_));
+    request.SetKey(awsString(key_));
+    request.SetBody(inputData);
+    auto outcome = client_->PutObject(request);
+  }
+
+ private:
+  Aws::S3::S3Client* client_;
+  std::string bucket_;
+  std::string key_;
 };
 } // namespace
 
