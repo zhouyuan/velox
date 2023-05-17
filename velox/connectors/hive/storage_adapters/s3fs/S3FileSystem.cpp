@@ -161,7 +161,10 @@ class S3ReadFile final : public ReadFile {
     request.SetRange(awsString(ss.str()));
     request.SetResponseStreamFactory(
         AwsWriteableStreamFactory(position, length));
+    auto start = std::chrono::steady_clock::now();
     auto outcome = client_->GetObject(request);
+    auto end = std::chrono::steady_clock::now();
+    std::cout << "LATENCY_BREAKDOWN: [S3 Pread]" << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << std::endl;
     VELOX_CHECK_AWS_OUTCOME(outcome, "Failed to get S3 object", bucket_, key_);
   }
 

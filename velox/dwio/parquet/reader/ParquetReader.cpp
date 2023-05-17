@@ -584,7 +584,10 @@ uint64_t ParquetRowReader::next(uint64_t size, velox::VectorPtr& result) {
       static_cast<uint64_t>(size), rowsInCurrentRowGroup_ - currentRowInGroup_);
 
   if (rowsToRead > 0) {
+    auto start = std::chrono::steady_clock::now();
     columnReader_->next(rowsToRead, result, nullptr);
+    auto end = std::chrono::steady_clock::now();
+    std::cout << "LATENCY_BREAKDOWN: [Parquet Next]" << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << std::endl;
     currentRowInGroup_ += rowsToRead;
   }
 

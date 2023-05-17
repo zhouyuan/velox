@@ -138,8 +138,11 @@ const char* FOLLY_NONNULL PageReader::uncompressData(
         VELOX_FAIL("Snappy uncompressed size not available");
       }
       VELOX_CHECK_EQ(uncompressedSize, sizeFromSnappy);
+      auto start = std::chrono::steady_clock::now();
       snappy::RawUncompress(
           pageData, compressedSize, uncompressedData_->asMutable<char>());
+      auto end = std::chrono::steady_clock::now();
+      std::cout << "LATENCY_BREAKDOWN: [Parquet Uncompress]" << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count() << std::endl;
       return uncompressedData_->as<char>();
     }
     case thrift::CompressionCodec::ZSTD: {
