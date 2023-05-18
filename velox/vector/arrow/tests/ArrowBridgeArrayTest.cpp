@@ -865,8 +865,7 @@ TEST_F(ArrowBridgeArrayExportTest, unsupported) {
 
   // Timestamps.
   vector = vectorMaker_.flatVectorNullable<Timestamp>({});
-  EXPECT_THROW(
-      velox::exportToArrow(vector, arrowArray, pool_.get()), VeloxException);
+  velox::exportToArrow(vector, arrowArray, pool_.get());
 }
 
 class ArrowBridgeArrayImportTest : public ArrowBridgeArrayExportTest {
