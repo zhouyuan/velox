@@ -17,6 +17,8 @@
 #pragma once
 
 #include "velox/common/file/FileSystems.h"
+#include "velox/core/Context.h"
+#include "velox/dwio/common/DataSink.h"
 
 namespace facebook::velox::filesystems {
 

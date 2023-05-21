@@ -195,6 +195,13 @@ class S3WriteFile final : public WriteFile {
     auto outcome = client_->PutObject(request);
   }
 
+  void close() override {}
+
+  void flush() override {}
+  uint64_t size() const override {
+    return 1;
+  }
+
  private:
   Aws::S3::S3Client* client_;
   std::string bucket_;
@@ -438,7 +445,10 @@ std::unique_ptr<ReadFile> S3FileSystem::openFileForRead(
 std::unique_ptr<WriteFile> S3FileSystem::openFileForWrite(
     std::string_view path,
     const FileOptions& /*unused*/) {
-  VELOX_NYI();
+  const std::string file = s3Path(path);
+  auto s3file = std::make_unique<S3WriteFile>(file, impl_->s3Client());
+  s3file->initialize();
+  return s3file;
 }
 
 std::string S3FileSystem::name() const {
@@ -473,4 +483,51 @@ void registerS3FileSystem() {
 }
 
 } // namespace filesystems
+
+class S3FileSink : public facebook::velox::dwio::common::DataSink {
+ public:
+  explicit S3FileSink(
+      const std::string& fullDestinationPath,
+      const facebook::velox::dwio::common::MetricsLogPtr& metricLogger =
+          facebook::velox::dwio::common::MetricsLog::voidLog(),
+      facebook::velox::dwio::common::IoStatistics* stats = nullptr)
+      : facebook::velox::dwio::common::DataSink{
+            "S3FileSink",
+            metricLogger,
+            stats} {
+    auto destinationPathStartPos = fullDestinationPath.substr(6).find("/", 0);
+    std::string destinationPath =
+        fullDestinationPath.substr(destinationPathStartPos + 6);
+    auto hdfsFileSystem =
+        filesystems::getFileSystem(fullDestinationPath, nullptr);
+    file_ = hdfsFileSystem->openFileForWrite(destinationPath);
+  }
+
+  ~S3FileSink() override {
+    destroy();
+  }
+
+  using facebook::velox::dwio::common::DataSink::write;
+
+  void write(std::vector<facebook::velox::dwio::common::DataBuffer<char>>&
+                 buffers) override {
+    writeImpl(buffers, [&](auto& buffer) {
+      size_t size = buffer.size();
+      std::string str(buffer.data(), size);
+      file_->append(str);
+      return size;
+    });
+  }
+
+  static void registerFactory();
+
+ protected:
+  void doClose() override {
+    file_->close();
+  }
+
+ private:
+  std::unique_ptr<WriteFile> file_;
+};
+
 } // namespace facebook::velox
