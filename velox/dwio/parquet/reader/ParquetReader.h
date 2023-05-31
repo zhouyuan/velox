@@ -83,7 +83,7 @@ class ReaderBase {
   int64_t rowGroupUncompressedSize(
       int32_t rowGroupIndex,
       const dwio::common::TypeWithId& type) const;
-
+  uint64_t fetchWaitTime = 0;
  private:
   // Reads and parses file footer.
   void loadFileMetaData();

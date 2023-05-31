@@ -453,6 +453,7 @@ void ReaderBase::scheduleRowGroups(
     const std::vector<uint32_t>& rowGroupIds,
     int32_t currentGroup,
     StructColumnReader& reader) {
+  uint64_t usec = 0;
   auto thisGroup = rowGroupIds[currentGroup];
   auto nextGroup =
       currentGroup + 1 < rowGroupIds.size() ? rowGroupIds[currentGroup + 1] : 0;
@@ -460,13 +461,21 @@ void ReaderBase::scheduleRowGroups(
   if (!input) {
     auto newInput = input_->clone();
     reader.enqueueRowGroup(thisGroup, *newInput);
-    newInput->load(dwio::common::LogType::STRIPE);
+    {
+      MicrosecondTimer timer(&usec);
+      newInput->load(dwio::common::LogType::STRIPE);
+    }
     inputs_[thisGroup] = std::move(newInput);
+    fetchWaitTime += usec;
   }
   if (nextGroup) {
     auto newInput = input_->clone();
     reader.enqueueRowGroup(nextGroup, *newInput);
-    newInput->load(dwio::common::LogType::STRIPE);
+    {
+      MicrosecondTimer timer(&usec);
+      newInput->load(dwio::common::LogType::STRIPE);
+      fetchWaitTime += usec;
+    }
     inputs_[nextGroup] = std::move(newInput);
   }
   if (currentGroup > 1) {
@@ -613,6 +622,7 @@ void ParquetRowReader::updateRuntimeStats(
     dwio::common::RuntimeStatistics& stats) const {
   stats.skippedStrides += skippedRowGroups_;
   stats.processedStrides += rowGroupIds_.size();
+  stats.fetchWaitTime += readerBase_->fetchWaitTime;
 }
 
 void ParquetRowReader::resetFilterCaches() {
