@@ -353,9 +353,9 @@ class ReaderOptions {
  public:
   static constexpr int32_t kDefaultLoadQuantum = 1 << 20; // 1MB
   static constexpr int32_t kDefaultCoalesceDistance = 512 << 10; // 512K
-  static constexpr uint64_t kDefaultDirectorySizeGuess = 1024 * 1024; // 1MB
+  static constexpr uint64_t kDefaultDirectorySizeGuess = 32 * 1024; // 32K
   static constexpr uint64_t kDefaultFilePreloadThreshold =
-      1024 * 1024 * 8; // 8MB
+      1024 * 1024 * 1; // 1MB
 
   ReaderOptions(velox::memory::MemoryPool* pool)
       : tailLocation(std::numeric_limits<uint64_t>::max()),
