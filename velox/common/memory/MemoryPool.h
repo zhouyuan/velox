@@ -609,6 +609,10 @@ class MemoryPoolImpl : public MemoryPool {
     return allocator_;
   }
 
+  MemoryAllocator* getAllocator() {
+    return allocator_;
+  }
+
   void setAllocator(MemoryAllocator* allocator) {
     allocator_ = allocator;
   }
