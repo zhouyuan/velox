@@ -139,7 +139,8 @@ class HiveDataSource : public DataSource {
       const std::string& scanId,
       bool caseSensitive,
       folly::Executor* FOLLY_NULLABLE executor,
-      const bool parallelLoadEnable);
+      const bool parallelLoadEnable,
+      folly::Executor* FOLLY_NULLABLE executor2);
 
   void addSplit(std::shared_ptr<ConnectorSplit> split) override;
 
@@ -234,6 +235,7 @@ class HiveDataSource : public DataSource {
   memory::MemoryAllocator* const FOLLY_NONNULL allocator_;
   const std::string& scanId_;
   folly::Executor* FOLLY_NULLABLE executor_;
+  folly::Executor* FOLLY_NULLABLE executor2_;
   const bool parallelLoadEnable_;
 };
 
@@ -242,7 +244,8 @@ class HiveConnector final : public Connector {
   explicit HiveConnector(
       const std::string& id,
       std::shared_ptr<const Config> properties,
-      folly::Executor* FOLLY_NULLABLE executor);
+      folly::Executor* FOLLY_NULLABLE executor,
+      folly::Executor* FOLLY_NULLABLE executor2);
 
   bool canAddDynamicFilter() const override {
     return true;
@@ -266,7 +269,8 @@ class HiveConnector final : public Connector {
         connectorQueryCtx->scanId(),
         HiveConfig::isCaseSensitive(connectorQueryCtx->config()),
         executor_,
-        HiveConfig::parallelLoadEnabled(connectorQueryCtx->config()));
+        HiveConfig::parallelLoadEnabled(connectorQueryCtx->config()),
+        executor2_);
   }
 
   bool supportsSplitPreload() override {
@@ -303,6 +307,7 @@ class HiveConnector final : public Connector {
  private:
   FileHandleFactory fileHandleFactory_;
   folly::Executor* FOLLY_NULLABLE executor_;
+  folly::Executor* FOLLY_NULLABLE executor2_;
 };
 
 class HiveConnectorFactory : public ConnectorFactory {
@@ -323,8 +328,9 @@ class HiveConnectorFactory : public ConnectorFactory {
   std::shared_ptr<Connector> newConnector(
       const std::string& id,
       std::shared_ptr<const Config> properties,
-      folly::Executor* FOLLY_NULLABLE executor = nullptr) override {
-    return std::make_shared<HiveConnector>(id, properties, executor);
+      folly::Executor* FOLLY_NULLABLE executor = nullptr,
+      folly::Executor* FOLLY_NULLABLE executor2 = nullptr) override {
+    return std::make_shared<HiveConnector>(id, properties, executor, executor2);
   }
 };
 

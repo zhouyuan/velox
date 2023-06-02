@@ -25,6 +25,7 @@
 #include "velox/type/Variant.h"
 
 #include <boost/lexical_cast.hpp>
+#include <folly/executors/IOThreadPoolExecutor.h>
 
 #include <memory>
 
@@ -258,7 +259,8 @@ HiveDataSource::HiveDataSource(
     const std::string& scanId,
     bool caseSensitive,
     folly::Executor* executor,
-    const bool parallelLoadEnable)
+    const bool parallelLoadEnable,
+    folly::Executor* executor2)
     : outputType_(outputType),
       fileHandleFactory_(fileHandleFactory),
       pool_(pool),
@@ -267,6 +269,7 @@ HiveDataSource::HiveDataSource(
       allocator_(allocator),
       scanId_(scanId),
       executor_(executor),
+      executor2_(executor2),
       parallelLoadEnable_(parallelLoadEnable) {
   // Column handled keyed on the column alias, the name used in the query.
   for (const auto& [canonicalizedName, columnHandle] : columnHandles) {
@@ -515,7 +518,7 @@ void HiveDataSource::addSplit(std::shared_ptr<ConnectorSplit> split) {
     readerOpts_.getMemoryPool(),
     dwio::common::MetricsLog::voidLog(),
     ioStats_,
-    executor_,
+    executor2_,
     readerOpts_.loadQuantum());
   } else {
     input = std::make_unique<dwio::common::BufferedInput>(
@@ -808,13 +811,15 @@ int64_t HiveDataSource::estimatedRowSize() {
 HiveConnector::HiveConnector(
     const std::string& id,
     std::shared_ptr<const Config> properties,
-    folly::Executor* FOLLY_NULLABLE executor)
+    folly::Executor* FOLLY_NULLABLE executor,
+    folly::Executor* FOLLY_NULLABLE executor2)
     : Connector(id, properties),
       fileHandleFactory_(
           std::make_unique<SimpleLRUCache<std::string, FileHandle>>(
               FLAGS_file_handle_cache_mb << 20),
           std::make_unique<FileHandleGenerator>(std::move(properties))),
-      executor_(executor) {}
+      executor_(executor),
+      executor2_(executor2) {}
 
 VELOX_REGISTER_CONNECTOR_FACTORY(std::make_shared<HiveConnectorFactory>())
 VELOX_REGISTER_CONNECTOR_FACTORY(
