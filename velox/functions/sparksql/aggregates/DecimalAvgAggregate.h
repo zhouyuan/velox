@@ -158,6 +158,7 @@ class DecimalAverageAggregate : public exec::Aggregate {
           rows,
           sumCol->as<SimpleVector<int64_t>>(),
           countCol->as<SimpleVector<int64_t>>());
+      return;
     }
     if (sumCol->type()->isLongDecimal()) {
       addIntermediateDecimalResults(
@@ -165,6 +166,7 @@ class DecimalAverageAggregate : public exec::Aggregate {
           rows,
           sumCol->as<SimpleVector<int128_t>>(),
           countCol->as<SimpleVector<int64_t>>());
+      return;
     }
     switch (sumCol->typeKind()) {
       default:
