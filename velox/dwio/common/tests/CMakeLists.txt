@@ -14,6 +14,16 @@
 
 add_subdirectory(utils)
 
+if(VELOX_ENABLE_AVX512)
+  set_source_files_properties(
+    BitPackDecoderBenchmarknew.cpp BitPackDecoderBenchmark.cpp
+    BitPackDecoderTest.cpp PROPERTIES COMPILE_FLAGS "${VELOX_AVX512_FLAG}")
+  add_executable(velox_dwio_common_bitpack_decoder_benchmarks
+                 BitPackDecoderBenchmarknew.cpp)
+  target_link_libraries(velox_dwio_common_bitpack_decoder_benchmarks
+                        velox_dwio_common ${FOLLY} ${FOLLY_BENCHMARK})
+endif()
+
 add_executable(
   velox_dwio_common_test
   BitConcatenationTest.cpp

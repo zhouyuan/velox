@@ -86,6 +86,8 @@ option(VELOX_BUILD_TEST_UTILS "Builds Velox test utilities" OFF)
 option(VELOX_BUILD_PYTHON_PACKAGE "Builds Velox Python bindings" OFF)
 option(VELOX_BUILD_BENCHMARKS "Builds Velox benchmarks" OFF)
 
+option(VELOX_ENABLE_AVX512 "Build with AVX512 instruction" ON)
+
 if(${VELOX_BUILD_MINIMAL})
   # Enable and disable components for velox base build
   set(VELOX_BUILD_TESTING OFF)
@@ -214,6 +216,10 @@ if(VELOX_ENABLE_PARQUET)
   # Native Parquet reader requires Apache Thrift and Arrow Parquet writer, which
   # are included in Arrow.
   set(VELOX_ENABLE_ARROW ON)
+endif()
+
+if(VELOX_ENABLE_AVX512)
+  include(CheckAVXCompiles)
 endif()
 
 # Turn on Codegen only for Clang and non Mac systems.

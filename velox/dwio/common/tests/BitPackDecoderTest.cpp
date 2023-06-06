@@ -16,7 +16,6 @@
 
 #include "velox/dwio/common/BitPackDecoder.h"
 #include "velox/common/base/Nulls.h"
-#include "velox/dwio/parquet/reader/RleBpDataDecoder.h"
 
 #include <folly/Random.h>
 #include <gtest/gtest.h>

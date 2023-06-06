@@ -80,8 +80,10 @@ target_link_libraries(
   velox_link_libs
   ${TEST_LINK_LIBS})
 
-if(${VELOX_ENABLE_ARROW})
+if(${VELOX_ENABLE_ARROW} AND VELOX_ENABLE_AVX512)
 
+  set_source_files_properties(RleBpDecoderTest.cpp
+                              PROPERTIES COMPILE_FLAGS "${VELOX_AVX512_FLAG}")
   add_executable(velox_dwio_parquet_rlebp_decoder_test RleBpDecoderTest.cpp)
   add_test(
     NAME velox_dwio_parquet_rlebp_decoder_test

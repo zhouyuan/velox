@@ -21,6 +21,9 @@ elseif(${VELOX_BUILD_TEST_UTILS})
   add_subdirectory(tests/utils)
 endif()
 
+set_source_files_properties(BitPackDecoder.cpp
+                            PROPERTIES COMPILE_FLAGS "${VELOX_AVX512_FLAG}")
+
 add_library(
   velox_dwio_common
   BitConcatenation.cpp
