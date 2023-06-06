@@ -32,7 +32,7 @@ int32_t alignBytes(int32_t numBytes) {
 // static
 std::optional<int32_t> UnsafeRowFast::fixedRowSize(const RowTypePtr& rowType) {
   for (const auto& child : rowType->children()) {
-    if (!child->isFixedWidth()) {
+    if (!child->isFixedWidth() || child->kind() == TypeKind::HUGEINT) {
       return std::nullopt;
     }
   }
@@ -404,7 +404,11 @@ int32_t UnsafeRowFast::serializeRow(vector_size_t index, char* buffer) {
       uint64_t sizeAndOffset = variableWidthOffset << 32 | size;
       reinterpret_cast<uint64_t*>(buffer + rowNullBytes_)[i] = sizeAndOffset;
 
-      variableWidthOffset += alignBytes(size);
+      if (child.typeKind_ == TypeKind::HUGEINT) {
+        variableWidthOffset += 16;
+      } else {
+        variableWidthOffset += alignBytes(size);
+      }
     }
   }
 
