@@ -135,6 +135,8 @@ int32_t UnsafeRowFast::variableWidthRowSize(vector_size_t index) {
       auto value = decoded_.valueAt<StringView>(index);
       return alignBytes(value.size());
     }
+    case TypeKind::HUGEINT:
+      return 16;
     case TypeKind::ARRAY:
       return arrayRowSize(index);
     case TypeKind::MAP:
@@ -194,6 +196,13 @@ int32_t UnsafeRowFast::serializeVariableWidth(
       auto value = decoded_.valueAt<StringView>(index);
       memcpy(buffer, value.data(), value.size());
       return value.size();
+    }
+    case TypeKind::HUGEINT: {
+      auto value = decoded_.valueAt<int128_t>(index);
+      int32_t size;
+      auto out = DecimalUtil::ToByteArray(value, &size);
+      memcpy(buffer, &out[0], 16);
+      return size;
     }
     case TypeKind::ARRAY:
       return serializeArray(index, buffer);
