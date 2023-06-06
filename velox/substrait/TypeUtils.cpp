@@ -82,13 +82,12 @@ std::pair<int32_t, int32_t> getPrecisionAndScale(const std::string& typeName) {
 
 TypePtr toVeloxType(const std::string& typeName) {
   VELOX_CHECK(!typeName.empty(), "Cannot convert empty string to Velox type.");
-
   auto type = getNameBeforeDelimiter(typeName, "<");
-  auto typeKind = mapNameToTypeKind(std::string(type));
-  if (isDecimalName(typeName)) {
+  if (typeName.find("DECIMAL") != std::string::npos) {
     auto decimal = getPrecisionAndScale(typeName);
     return DECIMAL(decimal.first, decimal.second);
   }
+  auto typeKind = mapNameToTypeKind(std::string(type));
   switch (typeKind) {
     case TypeKind::BOOLEAN:
       return BOOLEAN();
