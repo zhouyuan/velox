@@ -76,7 +76,11 @@ void UnsafeRowFast::initialize(const TypePtr& type) {
       auto rowBase = base->as<RowVector>();
       for (const auto& child : rowBase->children()) {
         children_.push_back(UnsafeRowFast(child));
-        childIsFixedWidth_.push_back(child->type()->isFixedWidth());
+        if (child->type()->kind() == TypeKind::HUGEINT) {
+          childIsFixedWidth_.push_back(false);
+        } else {
+          childIsFixedWidth_.push_back(child->type()->isFixedWidth());
+        }
       }
 
       rowNullBytes_ = alignBits(type->size());
@@ -97,6 +101,8 @@ void UnsafeRowFast::initialize(const TypePtr& type) {
     case TypeKind::REAL:
       FOLLY_FALLTHROUGH;
     case TypeKind::DOUBLE:
+      FOLLY_FALLTHROUGH;
+    case TypeKind::HUGEINT:
       FOLLY_FALLTHROUGH;
     case TypeKind::DATE:
       valueBytes_ = type->cppSizeInBytes();
