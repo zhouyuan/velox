@@ -16,7 +16,6 @@
 #include "velox/expression/DecodedArgs.h"
 #include "velox/expression/EvalCtx.h"
 #include "velox/expression/VectorFunction.h"
-
 namespace facebook::velox::functions {
 namespace {
 
@@ -38,7 +37,7 @@ class IsNullFunction : public exec::VectorFunction {
     if (arg->isConstantEncoding()) {
       bool isNull = arg->isNullAt(rows.begin());
       auto localResult = BaseVector::createConstant(
-          BOOLEAN(), IsNotNULL ? !isNull : isNull, rows.end(), pool);
+          BOOLEAN(), IsNotNULL ? !isNull : isNull, rows.size(), pool);
       context.moveOrCopyResult(localResult, rows, result);
       return;
     }
@@ -46,7 +45,7 @@ class IsNullFunction : public exec::VectorFunction {
     if (!arg->mayHaveNulls()) {
       // No nulls.
       auto localResult = BaseVector::createConstant(
-          BOOLEAN(), IsNotNULL ? true : false, rows.end(), pool);
+          BOOLEAN(), IsNotNULL ? true : false, rows.size(), pool);
       context.moveOrCopyResult(localResult, rows, result);
       return;
     }
@@ -56,7 +55,7 @@ class IsNullFunction : public exec::VectorFunction {
       if constexpr (IsNotNULL) {
         isNull = arg->nulls();
       } else {
-        isNull = AlignedBuffer::allocate<bool>(rows.end(), pool);
+        isNull = AlignedBuffer::allocate<bool>(rows.size(), pool);
         memcpy(
             isNull->asMutable<int64_t>(),
             arg->rawNulls(),
@@ -65,8 +64,7 @@ class IsNullFunction : public exec::VectorFunction {
       }
     } else {
       exec::DecodedArgs decodedArgs(rows, args, context);
-
-      isNull = AlignedBuffer::allocate<bool>(rows.end(), pool);
+      isNull = AlignedBuffer::allocate<bool>(rows.size(), pool);
       memcpy(
           isNull->asMutable<int64_t>(),
           decodedArgs.at(0)->nulls(),
@@ -76,9 +74,13 @@ class IsNullFunction : public exec::VectorFunction {
         bits::negate(isNull->asMutable<char>(), rows.end());
       }
     }
-
     auto localResult = std::make_shared<FlatVector<bool>>(
-        pool, BOOLEAN(), nullptr, rows.end(), isNull, std::vector<BufferPtr>{});
+        pool,
+        BOOLEAN(),
+        nullptr,
+        rows.size(),
+        isNull,
+        std::vector<BufferPtr>{});
     context.moveOrCopyResult(localResult, rows, result);
   }
 
