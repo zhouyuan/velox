@@ -462,7 +462,7 @@ class MemoryPool : public std::enable_shared_from_this<MemoryPool> {
   /// granularity.
   FOLLY_ALWAYS_INLINE static uint64_t quantizedSize(uint64_t size) {
     if (size < 16 * kMB) {
-      return bits::roundUp(size, kMB);
+      return bits::roundUp(size, kMB / 2);
     }
     if (size < 64 * kMB) {
       return bits::roundUp(size, 4 * kMB);
