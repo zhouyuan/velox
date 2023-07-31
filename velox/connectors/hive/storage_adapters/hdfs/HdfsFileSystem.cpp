@@ -24,6 +24,7 @@
 
 namespace facebook::velox::filesystems {
 std::string_view HdfsFileSystem::kScheme("hdfs://");
+std::string_view HdfsFileSystem::kViewFSScheme("viewfs://");
 std::mutex mtx;
 
 class HdfsFileSystem::Impl {
@@ -75,9 +76,13 @@ std::unique_ptr<ReadFile> HdfsFileSystem::openFileForRead(
   if (path.find(kScheme) == 0) {
     path.remove_prefix(kScheme.length());
   }
-  if (auto index = path.find('/')) {
-    path.remove_prefix(index);
+  if (path.find(kViewFSScheme) == 0) {
+    path.remove_prefix(kViewFSScheme.length());
   }
+  if (auto index = path.find('/'))
+    &&(path.find(kViewFSScheme) != 0) {
+      path.remove_prefix(index);
+    }
 
   return std::make_unique<HdfsReadFile>(impl_->hdfsClient(), path);
 }
@@ -89,6 +94,14 @@ std::unique_ptr<WriteFile> HdfsFileSystem::openFileForWrite(
 }
 
 bool HdfsFileSystem::isHdfsFile(const std::string_view filePath) {
+  return filePath.find(kScheme) == 0 || filePath.find(kViewFSScheme) == 0;
+}
+
+bool HdfsFileSystem::isViewFSFile(const std::string_view filePath) {
+  return filePath.find(kViewFSScheme) == 0;
+}
+
+bool HdfsFileSystem::isRealHdfsFile(const std::string_view filePath) {
   return filePath.find(kScheme) == 0;
 }
 
@@ -97,33 +110,72 @@ bool HdfsFileSystem::isHdfsFile(const std::string_view filePath) {
 HdfsServiceEndpoint HdfsFileSystem::getServiceEndpoint(
     const std::string_view filePath,
     const Config* config) {
-  auto endOfIdentityInfo = filePath.find('/', kScheme.size());
-  std::string hdfsIdentity{
-      filePath.data(), kScheme.size(), endOfIdentityInfo - kScheme.size()};
-  if (hdfsIdentity.empty()) {
-    // Fall back to get a fixed endpoint from config.
-    auto hdfsHost = config->get("hive.hdfs.host");
-    VELOX_CHECK(
-        hdfsHost.hasValue(),
-        "hdfsHost is empty, configuration missing for hdfs host");
-    auto hdfsPort = config->get("hive.hdfs.port");
-    VELOX_CHECK(
-        hdfsPort.hasValue(),
-        "hdfsPort is empty, configuration missing for hdfs port");
-    return HdfsServiceEndpoint{*hdfsHost, *hdfsPort};
-  }
+  if (isRealHdfsFile(filePath)) {
+    auto endOfIdentityInfo = filePath.find('/', kScheme.size());
+    std::string hdfsIdentity{
+        filePath.data(), kScheme.size(), endOfIdentityInfo - kScheme.size()};
+    if (hdfsIdentity.empty()) {
+      // Fall back to get a fixed endpoint from config.
+      auto hdfsHost = config->get("hive.hdfs.host");
+      VELOX_CHECK(
+          hdfsHost.hasValue(),
+          "hdfsHost is empty, configuration missing for hdfs host");
+      auto hdfsPort = config->get("hive.hdfs.port");
+      VELOX_CHECK(
+          hdfsPort.hasValue(),
+          "hdfsPort is empty, configuration missing for hdfs port");
+      return HdfsServiceEndpoint{*hdfsHost, *hdfsPort};
+    }
 
-  auto hostAndPortSeparator = hdfsIdentity.find(':', 0);
-  // In HDFS HA mode, the hdfsIdentity is a nameservice ID with no port.
-  if (hostAndPortSeparator == std::string::npos) {
-    return HdfsServiceEndpoint{hdfsIdentity, ""};
+    auto hostAndPortSeparator = hdfsIdentity.find(':', 0);
+    // In HDFS HA mode, the hdfsIdentity is a nameservice ID with no port.
+    if (hostAndPortSeparator == std::string::npos) {
+      return HdfsServiceEndpoint{hdfsIdentity, ""};
+    }
+    std::string host{hdfsIdentity.data(), 0, hostAndPortSeparator};
+    std::string port{
+        hdfsIdentity.data(),
+        hostAndPortSeparator + 1,
+        hdfsIdentity.size() - hostAndPortSeparator - 1};
+    return HdfsServiceEndpoint{host, port};
+  } else if (isViewFSFile(filePath)) {
+    auto endOfIdentityInfo = filePath.find('/', kViewFSScheme.size());
+    std::string hdfsIdentity{
+        filePath.data(),
+        kViewFSScheme.size(),
+        endOfIdentityInfo - kViewFSScheme.size()};
+    // simply move 1 bytes after identity:
+    auto firstLinkPos = filePath.find('/', endOfIdentityInfo + 1);
+    std::string firstLink = {
+        filePath.data(),
+        endOfIdentityInfo + 1,
+        firstLinkPos - endOfIdentityInfo - 1};
+    hdfsIdentity = "viewfs_" + hdfsIdentity + "_" + firstLink;
+    if (hdfsIdentity.empty()) {
+      // Fall back to get a fixed endpoint from config.
+      auto hdfsHost = config->get("hive.hdfs.host");
+      VELOX_CHECK(
+          hdfsHost.hasValue(),
+          "hdfsHost is empty, configuration missing for hdfs host");
+      auto hdfsPort = config->get("hive.hdfs.port");
+      VELOX_CHECK(
+          hdfsPort.hasValue(),
+          "hdfsPort is empty, configuration missing for hdfs port");
+      return HdfsServiceEndpoint{*hdfsHost, *hdfsPort};
+    }
+
+    auto hostAndPortSeparator = hdfsIdentity.find(':', 0);
+    // In HDFS HA mode, the hdfsIdentity is a nameservice ID with no port.
+    if (hostAndPortSeparator == std::string::npos) {
+      return HdfsServiceEndpoint{hdfsIdentity, ""};
+    }
+    std::string host{hdfsIdentity.data(), 0, hostAndPortSeparator};
+    std::string port{
+        hdfsIdentity.data(),
+        hostAndPortSeparator + 1,
+        hdfsIdentity.size() - hostAndPortSeparator - 1};
+    return HdfsServiceEndpoint{host, port};
   }
-  std::string host{hdfsIdentity.data(), 0, hostAndPortSeparator};
-  std::string port{
-      hdfsIdentity.data(),
-      hostAndPortSeparator + 1,
-      hdfsIdentity.size() - hostAndPortSeparator - 1};
-  return HdfsServiceEndpoint{host, port};
 }
 
 static std::function<std::shared_ptr<FileSystem>(

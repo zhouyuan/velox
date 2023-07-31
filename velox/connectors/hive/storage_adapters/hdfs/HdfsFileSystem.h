@@ -43,6 +43,7 @@ struct HdfsServiceEndpoint {
 class HdfsFileSystem : public FileSystem {
  private:
   static std::string_view kScheme;
+  static std::string_view kViewFSScheme;
 
  public:
   explicit HdfsFileSystem(
@@ -85,7 +86,8 @@ class HdfsFileSystem : public FileSystem {
   }
 
   static bool isHdfsFile(std::string_view filename);
-
+  static bool isViewFSFile(std::string_view filename);
+  static bool isRealHdfsFile(std::string_view filename);
   /// The given filePath is used to infer hdfs endpoint. If hdfs identity is
   /// missing from filePath, the configured "hive.hdfs.host" & "hive.hdfs.port"
   /// will be used.
