@@ -974,7 +974,8 @@ exec::AggregateRegistrationResult registerMinMax(const std::string& name) {
                   inputType->kindName());
           }
         }
-      });
+      },
+      /*registerCompanionFunctions*/ true);
 }
 
 } // namespace
