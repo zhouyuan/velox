@@ -269,7 +269,7 @@ void OrderBy::noMoreInput() {
     RowContainerIterator iter;
     data_->listRows(&iter, numRows_, returningRows_.data());
     constexpr uint16_t kSortThreads = 8;
-    boost::sort::parallel_stable_sort(
+    boost::sort::pdqsort(
         returningRows_.begin(),
         returningRows_.end(),
         [this](const char* leftRow, const char* rightRow) {
@@ -280,8 +280,7 @@ void OrderBy::noMoreInput() {
             }
           }
           return false;
-        },
-        kSortThreads);
+        });
 
   } else {
     // Finish spill, and we shouldn't get any rows from non-spilled partition as
