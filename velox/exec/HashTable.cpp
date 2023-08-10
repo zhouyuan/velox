@@ -440,24 +440,24 @@ void HashTable<ignoreNullKeys>::groupProbe(HashLookup& lookup) {
   int32_t probeIndex = 0;
   int32_t numProbes = lookup.rows.size();
   auto rows = lookup.rows.data();
-  for (; probeIndex + 4 <= numProbes; probeIndex += 4) {
-    int32_t row = rows[probeIndex];
-    state1.preProbe(tags_, sizeMask_, lookup.hashes[row], row);
-    row = rows[probeIndex + 1];
-    state2.preProbe(tags_, sizeMask_, lookup.hashes[row], row);
-    row = rows[probeIndex + 2];
-    state3.preProbe(tags_, sizeMask_, lookup.hashes[row], row);
-    row = rows[probeIndex + 3];
-    state4.preProbe(tags_, sizeMask_, lookup.hashes[row], row);
-    state1.firstProbe<ProbeState::Operation::kInsert>(table_, 0);
-    state2.firstProbe<ProbeState::Operation::kInsert>(table_, 0);
-    state3.firstProbe<ProbeState::Operation::kInsert>(table_, 0);
-    state4.firstProbe<ProbeState::Operation::kInsert>(table_, 0);
-    fullProbe<false>(lookup, state1, false);
-    fullProbe<false>(lookup, state2, true);
-    fullProbe<false>(lookup, state3, true);
-    fullProbe<false>(lookup, state4, true);
-  }
+  //for (; probeIndex + 4 <= numProbes; probeIndex += 4) {
+  //  int32_t row = rows[probeIndex];
+  //  state1.preProbe(tags_, sizeMask_, lookup.hashes[row], row);
+  //  row = rows[probeIndex + 1];
+  //  state2.preProbe(tags_, sizeMask_, lookup.hashes[row], row);
+  //  row = rows[probeIndex + 2];
+  //  state3.preProbe(tags_, sizeMask_, lookup.hashes[row], row);
+  //  row = rows[probeIndex + 3];
+  //  state4.preProbe(tags_, sizeMask_, lookup.hashes[row], row);
+  //  state1.firstProbe<ProbeState::Operation::kInsert>(table_, 0);
+  //  state2.firstProbe<ProbeState::Operation::kInsert>(table_, 0);
+  //  state3.firstProbe<ProbeState::Operation::kInsert>(table_, 0);
+  //  state4.firstProbe<ProbeState::Operation::kInsert>(table_, 0);
+  //  fullProbe<false>(lookup, state1, false);
+  //  fullProbe<false>(lookup, state2, true);
+  //  fullProbe<false>(lookup, state3, true);
+  //  fullProbe<false>(lookup, state4, true);
+  //}
   for (; probeIndex < numProbes; ++probeIndex) {
     int32_t row = rows[probeIndex];
     state1.preProbe(tags_, sizeMask_, lookup.hashes[row], row);
