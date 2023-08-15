@@ -105,6 +105,11 @@ void registerExpressionGeneralFunctions(const std::string& prefix) {
       prefix + "make_decimal_by_unscaled_value",
       makeDecimalByUnscaledValueSignatures(),
       makeMakeDecimalByUnscaledValue);
+
+  exec::registerVectorFunction(
+      prefix + "unscaled_value",
+      unscaledValueSignatures(),
+      makeUnscaledValue());
 }
 } // namespace
 
@@ -277,6 +282,7 @@ void registerFunctions(const std::string& prefix) {
       {prefix + "might_contain"});
 
   registerArrayMinMaxFunctions(prefix);
+  // Register expression general functions.
   registerExpressionGeneralFunctions(prefix);
 }
 
