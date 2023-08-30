@@ -20,6 +20,7 @@ add_executable(
   ArraySortTest.cpp
   BitwiseTest.cpp
   ComparisonsTest.cpp
+  DecimalVectorFunctionTest.cpp
   DateTimeFunctionsTest.cpp
   DecimalArithmeticTest.cpp
   DecimalCompareTest.cpp
