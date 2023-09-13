@@ -16,6 +16,7 @@
 #include "velox/functions/sparksql/Register.h"
 
 #include "velox/expression/RegisterSpecialForm.h"
+#include "velox/expression/SpecialFormRegistry.h"
 #include "velox/functions/lib/IsNull.h"
 #include "velox/functions/lib/Re2Functions.h"
 #include "velox/functions/lib/RegistrationHelpers.h"
@@ -36,6 +37,7 @@
 #include "velox/functions/sparksql/RegisterCompare.h"
 #include "velox/functions/sparksql/Size.h"
 #include "velox/functions/sparksql/String.h"
+#include "velox/functions/sparksql/specialforms/DecimalRound.h"
 
 namespace facebook::velox::functions {
 extern void registerElementAtFunction(
@@ -77,6 +79,11 @@ namespace sparksql {
 
 void registerAllSpecialFormGeneralFunctions() {
   exec::registerFunctionCallToSpecialForms();
+  VELOX_REGISTER_VECTOR_FUNCTION(
+      udf_decimal_round, DecimalRoundCallToSpecialForm::kRoundDecimal);
+  exec::registerFunctionCallToSpecialForm(
+      DecimalRoundCallToSpecialForm::kRoundDecimal,
+      std::make_unique<DecimalRoundCallToSpecialForm>());
 }
 
 namespace {
@@ -201,6 +208,7 @@ void registerFunctions(const std::string& prefix) {
   // VELOX_REGISTER_VECTOR_FUNCTION macro, which must be invoked in the same
   // namespace as the function definition.
   workAroundRegistrationMacro(prefix);
+  registerAllSpecialFormGeneralFunctions();
 
   // These groups of functions involve instantiating many templates. They're
   // broken out into a separate compilation unit to improve build latency.

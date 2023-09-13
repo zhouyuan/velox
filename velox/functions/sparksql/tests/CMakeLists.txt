@@ -26,6 +26,7 @@ add_executable(
   DecimalCompareTest.cpp
   DecimalUtilTest.cpp
   DecimalVectorFunctionTest.cpp
+  DecimalVectorFunctionsTest.cpp
   ElementAtTest.cpp
   HashTest.cpp
   InTest.cpp
