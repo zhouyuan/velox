@@ -115,6 +115,8 @@ void registerFunctions(const std::string& prefix) {
       prefix + "instr", instrSignatures(), makeInstr);
   exec::registerStatefulVectorFunction(
       prefix + "length", lengthSignatures(), makeLength);
+  exec::registerStatefulVectorFunction(
+      prefix + "concat_ws", concatWsSignatures(), makeConcatWs);
 
   registerFunction<Md5Function, Varchar, Varbinary>({prefix + "md5"});
   registerFunction<Sha1HexStringFunction, Varchar, Varbinary>(
