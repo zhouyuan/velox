@@ -137,6 +137,19 @@ std::shared_ptr<WriterProperties> getArrowParquetWriterOptions(
   return properties->build();
 }
 
+namespace {
+
+void exportToArrow(
+    const TypePtr& type,
+    std::shared_ptr<memory::MemoryPool> pool,
+    ArrowSchema& out,
+    const ArrowOptions& options) {
+  auto leafPool = pool->addLeafChild("parquet-write-schema-convert");
+  exportToArrow(BaseVector::create(type, 0, leafPool.get()), out, options);
+}
+
+} // namespace
+
 Writer::Writer(
     std::unique_ptr<dwio::common::FileSink> sink,
     const WriterOptions& options,
@@ -155,6 +168,20 @@ Writer::Writer(
   }
   options_.timestampUnit =
       static_cast<TimestampUnit>(options.arrowBridgeTimestampUnit);
+
+  if (options.schema) {
+    ArrowSchema arrowSchema;
+    exportToArrow(options.schema, pool_, arrowSchema, options_);
+
+    PARQUET_ASSIGN_OR_THROW(
+        arrowContext_->schema, ::arrow::ImportSchema(&arrowSchema));
+
+    arrowContext_->stagingChunks.insert(
+        arrowContext_->stagingChunks.end(),
+        arrowContext_->schema->num_fields(),
+        std::vector<std::shared_ptr<::arrow::Array>>());
+  }
+
   arrowContext_->properties =
       getArrowParquetWriterOptions(options, flushPolicy_);
 }
@@ -232,11 +259,10 @@ void Writer::write(const VectorPtr& data) {
       auto recordBatch, ::arrow::ImportRecordBatch(&array, &schema));
   if (!arrowContext_->schema) {
     arrowContext_->schema = recordBatch->schema();
-    for (int colIdx = 0; colIdx < arrowContext_->schema->num_fields();
-         colIdx++) {
-      arrowContext_->stagingChunks.push_back(
-          std::vector<std::shared_ptr<::arrow::Array>>());
-    }
+    arrowContext_->stagingChunks.insert(
+        arrowContext_->stagingChunks.end(),
+        arrowContext_->schema->num_fields(),
+        std::vector<std::shared_ptr<::arrow::Array>>());
   }
 
   auto bytes = data->estimateFlatSize();

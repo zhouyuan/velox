@@ -100,6 +100,7 @@ struct WriterOptions {
   std::function<std::unique_ptr<DefaultFlushPolicy>()> flushPolicyFactory;
   std::shared_ptr<CodecOptions> codecOptions;
   uint8_t arrowBridgeTimestampUnit = static_cast<uint8_t>(TimestampUnit::kNano);
+  TypePtr schema;
 };
 
 // Writes Velox vectors into  a DataSink using Arrow Parquet writer.
