@@ -81,6 +81,12 @@ inline int64_t fromDateString(const StringView& str) {
   return fromDateString(str.data(), str.size());
 }
 
+int32_t castFromDateString(const char* buf, size_t len, bool isIso8601);
+
+inline int32_t castFromDateString(const StringView& str, bool isIso8601) {
+  return castFromDateString(str.data(), str.size(), isIso8601);
+}
+
 // Extracts the day of the week from the number of days since epoch
 int32_t extractISODayOfTheWeek(int32_t daysSinceEpoch);
 

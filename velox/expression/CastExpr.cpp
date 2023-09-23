@@ -608,6 +608,60 @@ VectorPtr CastExpr::applyDecimal(
   return castResult;
 }
 
+
+VectorPtr castToDate(
+    const SelectivityVector& rows,
+    const BaseVector& input,
+    exec::EvalCtx& context,
+    const TypePtr& fromType) {
+  VectorPtr castResult;
+  context.ensureWritable(rows, DATE(), castResult);
+  (*castResult).clearNulls(rows);
+  auto* resultFlatVector = castResult->as<FlatVector<int32_t>>();
+  switch (fromType->kind()) {
+    case TypeKind::VARCHAR: {
+      const auto& queryConfig = context.execCtx()->queryCtx()->queryConfig();
+      auto isIso8601 = queryConfig.isIso8601();
+
+      auto* inputVector = input.as<SimpleVector<StringView>>();
+      context.applyToSelectedNoThrow(rows, [&](int row) {
+        try {
+          auto inputString = inputVector->valueAt(row);
+          resultFlatVector->set(row, util::castFromDateString(inputString, isIso8601));
+
+        } catch (const VeloxUserError& ue) {
+          VELOX_USER_FAIL(
+              makeErrorMessage(input, row, DATE()) + " " + ue.message());
+        } catch (const std::exception& e) {
+          VELOX_USER_FAIL(
+              makeErrorMessage(input, row, DATE()) + " " + e.what());
+        }
+      });
+      return castResult;
+    }
+    case TypeKind::TIMESTAMP: {
+      auto* inputVector = input.as<SimpleVector<Timestamp>>();
+      static const int32_t kSecsPerDay{86'400};
+      context.applyToSelectedNoThrow(rows, [&](int row) {
+        auto input = inputVector->valueAt(row);
+        auto seconds = input.getSeconds();
+        if (seconds >= 0 || seconds % kSecsPerDay == 0) {
+          resultFlatVector->set(row, seconds / kSecsPerDay);
+        } else {
+          // For division with negatives, minus 1 to compensate the discarded
+          // fractional part. e.g. -1/86'400 yields 0, yet it should be
+          // considered as -1 day.
+          resultFlatVector->set(row, seconds / kSecsPerDay - 1);
+        }
+      });
+      return castResult;
+    }
+    default:
+      VELOX_UNSUPPORTED(
+          "Cast from {} to DATE is not supported", fromType->toString());
+  }
+}
+
 void CastExpr::applyPeeled(
     const SelectivityVector& rows,
     const BaseVector& input,
@@ -633,6 +687,9 @@ void CastExpr::applyPeeled(
     result = applyDecimal<int128_t>(rows, input, context, fromType, toType);
   } else {
     switch (toType->kind()) {
+      case TypeKind::DATE:
+        result = castToDate(rows, input, context, fromType);
+        break;
       case TypeKind::MAP:
         result = applyMap(
             rows,

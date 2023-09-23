@@ -80,6 +80,10 @@ class QueryConfig {
   // truncating the decimal part instead of rounding.
   static constexpr const char* kCastToIntByTruncate = "cast_to_int_by_truncate";
 
+  /// iso behavior on cast date
+  static constexpr const char* kCastStringToDateIsIso8601 =
+      "cast_string_to_date_is_iso_8601";
+
   // Allow decimal in casting varchar to int. The fractional part will be
   // ignored.
   static constexpr const char* kCastIntAllowDecimal =
@@ -292,6 +296,10 @@ class QueryConfig {
 
   bool isCastIntAllowDecimal() const {
     return get<bool>(kCastIntAllowDecimal, false);
+  }
+
+  bool isIso8601() const {
+    return get<bool>(kCastStringToDateIsIso8601, true);
   }
 
   bool codegenEnabled() const {
