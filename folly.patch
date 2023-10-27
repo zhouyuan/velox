@@ -1,0 +1,14 @@
+diff --git a/folly/Conv.h b/folly/Conv.h
+index bdcec543b..0e5dfbbd5 100644
+--- a/folly/Conv.h
++++ b/folly/Conv.h
+@@ -683,7 +683,8 @@ toAppend(
+   FOLLY_CLANG_DISABLE_WARNING("-Wcovered-switch-default")
+   switch (mode) {
+     case DoubleToStringConverter::SHORTEST:
+-      conv.ToShortest(value, &builder);
++      //conv.ToShortest(value, &builder);
++      conv.ToExponential(value, -1, &builder);
+       break;
+     case DoubleToStringConverter::SHORTEST_SINGLE:
+       conv.ToShortestSingle(static_cast<float>(value), &builder);
