@@ -45,7 +45,7 @@ class SharedArbitrator : public memory::MemoryArbitrator {
 
   void reserveMemory(MemoryPool* pool, uint64_t /*unused*/) final;
 
-  uint64_t releaseMemory(MemoryPool* pool, uint64_t bytes) final;
+  void releaseMemory(MemoryPool* pool) final;
 
   bool growMemory(
       MemoryPool* pool,

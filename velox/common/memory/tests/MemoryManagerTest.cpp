@@ -127,7 +127,7 @@ class FakeTestArbitrator : public MemoryArbitrator {
     VELOX_NYI();
   }
 
-  uint64_t releaseMemory(MemoryPool* pool, uint64_t bytes) override {
+  void releaseMemory(MemoryPool* pool) override {
     VELOX_NYI();
   }
 
@@ -211,6 +211,9 @@ TEST_F(MemoryManagerTest, addPoolWithArbitrator) {
   options.allocator = allocator.get();
   options.capacity = kCapacity;
   options.arbitratorKind = arbitratorKind_;
+  // The arbitrator capacity will be overridden by the memory manager's
+  // capacity.
+  options.capacity = options.capacity;
   const uint64_t initialPoolCapacity = options.capacity / 32;
   options.memoryPoolInitCapacity = initialPoolCapacity;
   MemoryManager manager{options};

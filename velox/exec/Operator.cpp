@@ -606,7 +606,7 @@ uint64_t Operator::MemoryReclaimer::reclaim(
   }
 
   op_->reclaim(targetBytes, stats);
-  return pool->shrinkManaged(pool, targetBytes);
+  return pool->shrink(targetBytes);
 }
 
 void Operator::MemoryReclaimer::abort(

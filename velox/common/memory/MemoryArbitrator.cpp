@@ -95,9 +95,8 @@ class NoopArbitrator : public MemoryArbitrator {
 
   // Noop arbitrator has no memory capacity limit so no operation needed for
   // memory pool capacity release.
-  uint64_t releaseMemory(MemoryPool* /*unused*/, uint64_t /*unused*/) override {
+  void releaseMemory(MemoryPool* /*unused*/) override {
     // No-op
-    return 0ULL;
   }
 
   // Noop arbitrator has no memory capacity limit so no operation needed for
@@ -152,10 +151,6 @@ bool MemoryArbitrator::registerFactory(
 
 void MemoryArbitrator::unregisterFactory(const std::string& kind) {
   arbitratorFactories().unregisterFactory(kind);
-}
-
-uint64_t MemoryArbitrator::capacity() {
-  return capacity_;
 }
 
 std::unique_ptr<MemoryReclaimer> MemoryReclaimer::create() {

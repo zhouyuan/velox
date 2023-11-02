@@ -149,14 +149,6 @@ std::shared_ptr<MemoryPool> MemoryManager::addLeafPool(
   return defaultRoot_->addLeafChild(poolName, threadSafe, nullptr);
 }
 
-uint64_t MemoryManager::shrinkPool(MemoryPool* pool, uint64_t decrementBytes) {
-  VELOX_CHECK_NOT_NULL(pool);
-  if (arbitrator_ == nullptr) {
-    return pool->shrink(decrementBytes);
-  }
-  return arbitrator_->releaseMemory(pool, decrementBytes);
-}
-
 bool MemoryManager::growPool(MemoryPool* pool, uint64_t incrementBytes) {
   VELOX_CHECK_NOT_NULL(pool);
   VELOX_CHECK_NE(pool->capacity(), kMaxMemory);
@@ -175,7 +167,7 @@ void MemoryManager::dropPool(MemoryPool* pool) {
     VELOX_FAIL("The dropped memory pool {} not found", pool->name());
   }
   pools_.erase(it);
-  arbitrator_->releaseMemory(pool, 0);
+  arbitrator_->releaseMemory(pool);
 }
 
 MemoryPool& MemoryManager::deprecatedSharedLeafPool() {
