@@ -16,7 +16,6 @@
 #include "velox/expression/DecodedArgs.h"
 #include "velox/expression/EvalCtx.h"
 #include "velox/expression/VectorFunction.h"
-
 namespace facebook::velox::functions {
 namespace {
 
@@ -65,7 +64,6 @@ class IsNullFunction : public exec::VectorFunction {
       }
     } else {
       exec::DecodedArgs decodedArgs(rows, args, context);
-
       isNull = AlignedBuffer::allocate<bool>(rows.size(), pool);
       memcpy(
           isNull->asMutable<int64_t>(),
@@ -76,7 +74,6 @@ class IsNullFunction : public exec::VectorFunction {
         bits::negate(isNull->asMutable<char>(), rows.end());
       }
     }
-
     auto localResult = std::make_shared<FlatVector<bool>>(
         pool,
         BOOLEAN(),
