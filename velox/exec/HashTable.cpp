@@ -1587,44 +1587,78 @@ int32_t HashTable<ignoreNullKeys>::listJoinResults(
   }
   int numOut = 0;
   auto maxOut = inputRows.size();
-  while (iter.lastRowIndex < iter.rows->size()) {
-    if (!iter.nextHit) {
-      auto row = (*iter.rows)[iter.lastRowIndex];
-      iter.nextHit = (*iter.hits)[row]; // NOLINT
+  if (!includeMisses) {
+    while (iter.lastRowIndex < iter.rows->size()) {
       if (!iter.nextHit) {
-        ++iter.lastRowIndex;
+        auto row = (*iter.rows)[iter.lastRowIndex];
+        iter.nextHit = (*iter.hits)[row]; // NOLINT
+        if (!iter.nextHit) {
+          ++iter.lastRowIndex;
 
-        if (includeMisses) {
-          inputRows[numOut] = row; // NOLINT
-          hits[numOut] = nullptr;
-          ++numOut;
-          if (numOut >= maxOut) {
-            return numOut;
+          continue;
+        }
+      }
+      while (iter.nextHit) {
+        char* next = nullptr;
+        if (nextOffset_) {
+          next = nextRow(iter.nextHit);
+          if (next) {
+            __builtin_prefetch(reinterpret_cast<char*>(next) + nextOffset_);
           }
         }
-        continue;
-      }
-    }
-    while (iter.nextHit) {
-      char* next = nullptr;
-      if (nextOffset_) {
-        next = nextRow(iter.nextHit);
-        if (next) {
-          __builtin_prefetch(reinterpret_cast<char*>(next) + nextOffset_);
+        inputRows[numOut] = (*iter.rows)[iter.lastRowIndex]; // NOLINT
+        hits[numOut] = iter.nextHit;
+        ++numOut;
+        iter.nextHit = next;
+        if (!iter.nextHit) {
+          ++iter.lastRowIndex;
+        }
+        if (numOut >= maxOut) {
+          return numOut;
         }
       }
-      inputRows[numOut] = (*iter.rows)[iter.lastRowIndex]; // NOLINT
-      hits[numOut] = iter.nextHit;
-      ++numOut;
-      iter.nextHit = next;
+    }
+  } else {
+    while (iter.lastRowIndex < iter.rows->size()) {
       if (!iter.nextHit) {
-        ++iter.lastRowIndex;
+        auto row = (*iter.rows)[iter.lastRowIndex];
+        iter.nextHit = (*iter.hits)[row]; // NOLINT
+        if (!iter.nextHit) {
+          ++iter.lastRowIndex;
+
+         inputRows[numOut] = row; // NOLINT
+         hits[numOut] = nullptr;
+         ++numOut;
+         if (numOut >= maxOut) {
+           return numOut;
+         }
+         continue;
+        }
       }
-      if (numOut >= maxOut) {
-        return numOut;
+      while (iter.nextHit) {
+        char* next = nullptr;
+        if (nextOffset_) {
+          next = nextRow(iter.nextHit);
+          if (next) {
+            __builtin_prefetch(reinterpret_cast<char*>(next) + nextOffset_);
+          }
+        }
+        inputRows[numOut] = (*iter.rows)[iter.lastRowIndex]; // NOLINT
+        hits[numOut] = iter.nextHit;
+        ++numOut;
+        iter.nextHit = next;
+        if (!iter.nextHit) {
+          ++iter.lastRowIndex;
+        }
+        if (numOut >= maxOut) {
+          return numOut;
+        }
       }
     }
   }
+
+
+
   return numOut;
 }
 
