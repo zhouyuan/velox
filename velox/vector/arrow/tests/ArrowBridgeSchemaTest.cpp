@@ -116,7 +116,7 @@ class ArrowBridgeSchemaExportTest : public testing::Test {
               3, // index to use for the constant
               BaseVector::create(type, 100, pool_.get()));
 
-    velox::exportToArrow(constantVector, arrowSchema);
+    velox::exportToArrow(constantVector, arrowSchema, options_);
 
     EXPECT_STREQ("+r", arrowSchema.format);
     EXPECT_EQ(nullptr, arrowSchema.name);
@@ -151,7 +151,8 @@ class ArrowBridgeSchemaExportTest : public testing::Test {
   }
 
   void exportToArrow(const TypePtr& type, ArrowSchema& out) {
-    velox::exportToArrow(BaseVector::create(type, 0, pool_.get()), out);
+    velox::exportToArrow(
+        BaseVector::create(type, 0, pool_.get()), out, options_);
   }
 
   ArrowSchema makeArrowSchema(const char* format) {
@@ -168,6 +169,7 @@ class ArrowBridgeSchemaExportTest : public testing::Test {
     };
   }
 
+  ArrowOptions options_;
   std::shared_ptr<memory::MemoryPool> pool_{memory::addDefaultLeafMemoryPool()};
 };
 
@@ -185,7 +187,15 @@ TEST_F(ArrowBridgeSchemaExportTest, scalar) {
   testScalarType(VARCHAR(), "u");
   testScalarType(VARBINARY(), "z");
 
-  testScalarType(TIMESTAMP(), "ttn");
+  options_.timestampUnit = TimestampUnit::kSecond;
+  testScalarType(TIMESTAMP(), "tss:");
+  options_.timestampUnit = TimestampUnit::kMilli;
+  testScalarType(TIMESTAMP(), "tsm:");
+  options_.timestampUnit = TimestampUnit::kMicro;
+  testScalarType(TIMESTAMP(), "tsu:");
+  options_.timestampUnit = TimestampUnit::kNano;
+  testScalarType(TIMESTAMP(), "tsn:");
+
   testScalarType(DATE(), "tdD");
 
   testScalarType(DECIMAL(10, 4), "d:10,4");
@@ -349,7 +359,7 @@ TEST_F(ArrowBridgeSchemaImportTest, scalar) {
   EXPECT_EQ(*VARBINARY(), *testSchemaImport("Z"));
 
   // Temporal.
-  EXPECT_EQ(*TIMESTAMP(), *testSchemaImport("ttn"));
+  EXPECT_EQ(*TIMESTAMP(), *testSchemaImport("tsu:"));
   EXPECT_EQ(*DATE(), *testSchemaImport("tdD"));
 
   EXPECT_EQ(*DECIMAL(10, 4), *testSchemaImport("d:10,4"));
@@ -362,7 +372,7 @@ TEST_F(ArrowBridgeSchemaImportTest, scalar) {
 TEST_F(ArrowBridgeSchemaImportTest, complexTypes) {
   // Array.
   EXPECT_EQ(*ARRAY(BIGINT()), *testSchemaImportComplex("+l", {"l"}));
-  EXPECT_EQ(*ARRAY(TIMESTAMP()), *testSchemaImportComplex("+l", {"ttn"}));
+  EXPECT_EQ(*ARRAY(TIMESTAMP()), *testSchemaImportComplex("+l", {"tsn:"}));
   EXPECT_EQ(*ARRAY(DATE()), *testSchemaImportComplex("+l", {"tdD"}));
   EXPECT_EQ(*ARRAY(VARCHAR()), *testSchemaImportComplex("+l", {"U"}));
 
@@ -424,9 +434,11 @@ class ArrowBridgeSchemaTest : public testing::Test {
   }
 
   void exportToArrow(const TypePtr& type, ArrowSchema& out) {
-    velox::exportToArrow(BaseVector::create(type, 0, pool_.get()), out);
+    velox::exportToArrow(
+        BaseVector::create(type, 0, pool_.get()), out, options_);
   }
 
+  ArrowOptions options_;
   std::shared_ptr<memory::MemoryPool> pool_{memory::addDefaultLeafMemoryPool()};
 };
 
@@ -502,7 +514,7 @@ TEST_F(ArrowBridgeSchemaImportTest, dictionaryTypeTest) {
       *testSchemaDictionaryImport(
           "i",
           makeComplexArrowSchema(
-              schemas, schemaPtrs, mapSchemas, mapSchemaPtrs, "+l", {"ttn"})));
+              schemas, schemaPtrs, mapSchemas, mapSchemaPtrs, "+l", {"ts"})));
   EXPECT_EQ(
       *ARRAY(DATE()),
       *testSchemaDictionaryImport(

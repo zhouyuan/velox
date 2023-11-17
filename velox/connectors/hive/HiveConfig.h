@@ -151,6 +151,14 @@ class HiveConfig {
   InsertExistingPartitionsBehavior insertExistingPartitionsBehavior(
       const Config* session) const;
 
+  // Timestamp unit used during Velox-Arrow conversion.
+  static constexpr const char* kArrowBridgeTimestampUnit =
+      "arrow_bridge_timestamp_unit";
+
+  /// Returns the timestamp unit used in Velox-Arrow conversion.
+  /// 0: second, 3: milli, 6: micro, 9: nano.
+  static uint8_t arrowBridgeTimestampUnit(const Config* config);
+
   uint32_t maxPartitionsPerWriters(const Config* session) const;
 
   bool immutablePartitions() const;

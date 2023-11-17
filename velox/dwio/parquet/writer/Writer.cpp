@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include "velox/vector/arrow/Bridge.h"
-
 #include <arrow/c/bridge.h>
 #include <arrow/io/interfaces.h>
 #include <arrow/table.h>
@@ -155,6 +153,8 @@ Writer::Writer(
   } else {
     flushPolicy_ = std::make_unique<DefaultFlushPolicy>();
   }
+  options_.timestampUnit =
+      static_cast<TimestampUnit>(options.arrowBridgeTimestampUnit);
   arrowContext_->properties =
       getArrowParquetWriterOptions(options, flushPolicy_);
 }
@@ -224,11 +224,10 @@ dwio::common::StripeProgress getStripeProgress(
  * This method assumes each input `ColumnarBatch` have same schema.
  */
 void Writer::write(const VectorPtr& data) {
-  ArrowOptions options{.flattenDictionary = true, .flattenConstant = true};
   ArrowArray array;
   ArrowSchema schema;
-  exportToArrow(data, array, generalPool_.get(), options);
-  exportToArrow(data, schema, options);
+  exportToArrow(data, array, generalPool_.get(), options_);
+  exportToArrow(data, schema, options_);
   PARQUET_ASSIGN_OR_THROW(
       auto recordBatch, ::arrow::ImportRecordBatch(&array, &schema));
   if (!arrowContext_->schema) {
@@ -287,6 +286,10 @@ parquet::WriterOptions getParquetOptions(
   parquetOptions.memoryPool = options.memoryPool;
   if (options.compressionKind.has_value()) {
     parquetOptions.compression = options.compressionKind.value();
+  }
+  if (options.arrowBridgeTimestampUnit.has_value()) {
+    parquetOptions.arrowBridgeTimestampUnit =
+        options.arrowBridgeTimestampUnit.value();
   }
   return parquetOptions;
 }

@@ -50,7 +50,7 @@ class ArrowBridgeArrayExportTest : public testing::Test {
       const TypePtr& type = CppToType<T>::create()) {
     auto flatVector = vectorMaker_.flatVectorNullable(inputData, type);
     ArrowArray arrowArray;
-    velox::exportToArrow(flatVector, arrowArray, pool_.get());
+    velox::exportToArrow(flatVector, arrowArray, pool_.get(), options_);
 
     validateArray(inputData, arrowArray);
 
@@ -63,7 +63,7 @@ class ArrowBridgeArrayExportTest : public testing::Test {
   void testArrayVector(const T& inputData) {
     auto arrayVector = vectorMaker_.arrayVectorNullable(inputData);
     ArrowArray arrowArray;
-    velox::exportToArrow(arrayVector, arrowArray, pool_.get());
+    velox::exportToArrow(arrayVector, arrowArray, pool_.get(), options_);
 
     validateListArray(inputData, arrowArray);
 
@@ -89,7 +89,7 @@ class ArrowBridgeArrayExportTest : public testing::Test {
       const VectorPtr& constantVector,
       const TInput& input) {
     ArrowArray arrowArray;
-    velox::exportToArrow(constantVector, arrowArray, pool_.get());
+    velox::exportToArrow(constantVector, arrowArray, pool_.get(), options_);
     validateConstant<isScalar, T>(
         input,
         constantVector->size(),
@@ -157,8 +157,33 @@ class ArrowBridgeArrayExportTest : public testing::Test {
               bits::isBitSet(reinterpret_cast<const uint64_t*>(values), i))
               << "mismatch at index " << i;
         } else if constexpr (std::is_same_v<T, Timestamp>) {
-          EXPECT_EQ(inputData[i], Timestamp::fromNanos(values[i]))
-              << "mismatch at index " << i;
+          switch (options_.timestampUnit) {
+            case TimestampUnit::kSecond:
+              EXPECT_EQ(
+                  Timestamp(inputData[i].value().getSeconds(), 0),
+                  Timestamp(values[i], 0))
+                  << "mismatch at index " << i;
+              break;
+            case TimestampUnit::kMilli:
+              EXPECT_EQ(
+                  Timestamp::fromMillis(inputData[i].value().toMillis()),
+                  Timestamp::fromMillis(values[i]))
+                  << "mismatch at index " << i;
+              break;
+            case TimestampUnit::kMicro:
+              EXPECT_EQ(
+                  Timestamp::fromMicros(inputData[i].value().toMicros()),
+                  Timestamp::fromMicros(values[i]))
+                  << "mismatch at index " << i;
+              break;
+            case TimestampUnit::kNano:
+              EXPECT_EQ(inputData[i], Timestamp::fromNanos(values[i]))
+                  << "mismatch at index " << i;
+              break;
+            default:
+              VELOX_USER_FAIL(fmt::format(
+                  "Timestamp unit not supported: {}.", options_.timestampUnit));
+          }
         } else {
           EXPECT_EQ(inputData[i], values[i]) << "mismatch at index " << i;
         }
@@ -349,10 +374,12 @@ class ArrowBridgeArrayExportTest : public testing::Test {
   }
 
   void exportToArrow(const TypePtr& type, ArrowSchema& out) {
-    velox::exportToArrow(BaseVector::create(type, 0, pool_.get()), out);
+    velox::exportToArrow(
+        BaseVector::create(type, 0, pool_.get()), out, options_);
   }
 
   // Boiler plate structures required by vectorMaker.
+  ArrowOptions options_;
   std::shared_ptr<core::QueryCtx> queryCtx_{std::make_shared<core::QueryCtx>()};
   std::shared_ptr<memory::MemoryPool> pool_{memory::addDefaultLeafMemoryPool()};
   core::ExecCtx execCtx_{pool_.get(), queryCtx_.get()};
@@ -366,7 +393,7 @@ TEST_F(ArrowBridgeArrayExportTest, flatNotNull) {
     // Make sure that ArrowArray is correctly acquiring ownership, even after
     // the initial vector shared_ptr is gone.
     auto flatVector = vectorMaker_.flatVector(inputData);
-    velox::exportToArrow(flatVector, arrowArray, pool_.get());
+    velox::exportToArrow(flatVector, arrowArray, pool_.get(), options_);
   }
 
   EXPECT_EQ(inputData.size(), arrowArray.length);
@@ -489,16 +516,23 @@ TEST_F(ArrowBridgeArrayExportTest, flatDate) {
 }
 
 TEST_F(ArrowBridgeArrayExportTest, flatTimestamp) {
-  testFlatVector<Timestamp>(
-      {
-          Timestamp(0, 0),
-          std::nullopt,
-          Timestamp(1699300965, 12'349),
-          Timestamp(-2208960000, 0), // 1900-01-01
-          Timestamp(3155788800, 999'999'999),
-          std::nullopt,
-      },
-      TIMESTAMP());
+  for (uint8_t unit :
+       {(uint8_t)TimestampUnit::kSecond,
+        (uint8_t)TimestampUnit::kMilli,
+        (uint8_t)TimestampUnit::kMicro,
+        (uint8_t)TimestampUnit::kNano}) {
+    options_.timestampUnit = static_cast<TimestampUnit>(unit);
+    testFlatVector<Timestamp>(
+        {
+            Timestamp(0, 0),
+            std::nullopt,
+            Timestamp(1699300965, 12'349),
+            Timestamp(-2208960000, 0), // 1900-01-01
+            Timestamp(3155788800, 999'999'999),
+            std::nullopt,
+        },
+        TIMESTAMP());
+  }
 
   // Out of range. If nanosecond precision is represented in Arrow, timestamps
   // starting around 2263-01-01 should overflow and throw a user exception.
@@ -537,7 +571,7 @@ TEST_F(ArrowBridgeArrayExportTest, rowVector) {
   });
 
   ArrowArray arrowArray;
-  velox::exportToArrow(vector, arrowArray, pool_.get());
+  velox::exportToArrow(vector, arrowArray, pool_.get(), options_);
 
   EXPECT_EQ(col1.size(), arrowArray.length);
   EXPECT_EQ(0, arrowArray.null_count);
@@ -574,7 +608,7 @@ TEST_F(ArrowBridgeArrayExportTest, rowVectorNullable) {
   vector->setNullCount(3);
 
   ArrowArray arrowArray;
-  velox::exportToArrow(vector, arrowArray, pool_.get());
+  velox::exportToArrow(vector, arrowArray, pool_.get(), options_);
 
   EXPECT_EQ(col1.size(), arrowArray.length);
   EXPECT_EQ(3, arrowArray.null_count);
@@ -602,7 +636,8 @@ TEST_F(ArrowBridgeArrayExportTest, rowVectorNullable) {
 
 TEST_F(ArrowBridgeArrayExportTest, rowVectorEmpty) {
   ArrowArray arrowArray;
-  velox::exportToArrow(vectorMaker_.rowVector({}), arrowArray, pool_.get());
+  velox::exportToArrow(
+      vectorMaker_.rowVector({}), arrowArray, pool_.get(), options_);
   EXPECT_EQ(0, arrowArray.n_children);
   EXPECT_EQ(1, arrowArray.n_buffers);
   EXPECT_EQ(nullptr, arrowArray.children);
@@ -612,11 +647,12 @@ TEST_F(ArrowBridgeArrayExportTest, rowVectorEmpty) {
 
 std::shared_ptr<arrow::Array> toArrow(
     const VectorPtr& vec,
+    const ArrowOptions& options,
     memory::MemoryPool* pool) {
   ArrowSchema schema;
   ArrowArray array;
-  exportToArrow(vec, schema);
-  exportToArrow(vec, array, pool);
+  exportToArrow(vec, schema, options);
+  exportToArrow(vec, array, pool, options);
   EXPECT_OK_AND_ASSIGN(auto type, arrow::ImportType(&schema));
   EXPECT_OK_AND_ASSIGN(auto ans, arrow::ImportArray(&array, type));
   return ans;
@@ -650,7 +686,7 @@ TEST_F(ArrowBridgeArrayExportTest, arraySimple) {
 
 TEST_F(ArrowBridgeArrayExportTest, arrayCrossValidate) {
   auto vec = vectorMaker_.arrayVector<int64_t>({{1, 2, 3}, {4, 5}});
-  auto array = toArrow(vec, pool_.get());
+  auto array = toArrow(vec, options_, pool_.get());
   ASSERT_OK(array->ValidateFull());
   EXPECT_EQ(array->null_count(), 0);
   ASSERT_EQ(*array->type(), *arrow::list(arrow::int64()));
@@ -677,10 +713,10 @@ TEST_F(ArrowBridgeArrayExportTest, arrayDictionary) {
 
   ArrowSchema schema;
   ArrowArray data;
-  velox::exportToArrow(vec, schema);
-  velox::exportToArrow(vec, data, vec->pool());
+  velox::exportToArrow(vec, schema, options_);
+  velox::exportToArrow(vec, data, vec->pool(), options_);
 
-  auto result = importFromArrowAsViewer(schema, data, vec->pool());
+  auto result = importFromArrowAsViewer(schema, data, options_, vec->pool());
   test::assertEqualVectors(result, vec);
   schema.release(&schema);
   data.release(&data);
@@ -694,7 +730,7 @@ TEST_F(ArrowBridgeArrayExportTest, arrayGap) {
   auto sizes = makeBuffer<vector_size_t>({2, 2});
   auto vec = std::make_shared<ArrayVector>(
       pool_.get(), ARRAY(BIGINT()), nullptr, 2, offsets, sizes, elements);
-  auto array = toArrow(vec, pool_.get());
+  auto array = toArrow(vec, options_, pool_.get());
   ASSERT_OK(array->ValidateFull());
   EXPECT_EQ(array->null_count(), 0);
   ASSERT_EQ(*array->type(), *arrow::list(arrow::int64()));
@@ -719,7 +755,7 @@ TEST_F(ArrowBridgeArrayExportTest, arrayReorder) {
   auto sizes = makeBuffer<vector_size_t>({2, 2});
   auto vec = std::make_shared<ArrayVector>(
       pool_.get(), ARRAY(BIGINT()), nullptr, 2, offsets, sizes, elements);
-  auto array = toArrow(vec, pool_.get());
+  auto array = toArrow(vec, options_, pool_.get());
   ASSERT_OK(array->ValidateFull());
   EXPECT_EQ(array->null_count(), 0);
   ASSERT_EQ(*array->type(), *arrow::list(arrow::int64()));
@@ -749,7 +785,7 @@ TEST_F(ArrowBridgeArrayExportTest, arrayNested) {
     std::make_shared<ArrayVector>(
         pool_.get(), ARRAY(inner->type()), nullptr, 2, offsets, sizes, inner);
   });
-  auto array = toArrow(vec, pool_.get());
+  auto array = toArrow(vec, options_, pool_.get());
   ASSERT_OK(array->ValidateFull());
   ASSERT_EQ(*array->type(), *arrow::list(arrow::list(arrow::int64())));
   auto& listArray = static_cast<const arrow::ListArray&>(*array);
@@ -766,7 +802,7 @@ TEST_F(ArrowBridgeArrayExportTest, mapSimple) {
   auto allOnes = [](vector_size_t) { return 1; };
   auto vec =
       vectorMaker_.mapVector<int64_t, int64_t>(2, allOnes, allOnes, allOnes);
-  auto array = toArrow(vec, pool_.get());
+  auto array = toArrow(vec, options_, pool_.get());
   ASSERT_OK(array->ValidateFull());
   EXPECT_EQ(array->null_count(), 0);
   ASSERT_EQ(*array->type(), *arrow::map(arrow::int64(), arrow::int64()));
@@ -801,7 +837,7 @@ TEST_F(ArrowBridgeArrayExportTest, mapNested) {
     std::make_shared<MapVector>(
         pool_.get(), type, nullptr, 2, offsets, sizes, keys, inner);
   });
-  auto array = toArrow(vec, pool_.get());
+  auto array = toArrow(vec, options_, pool_.get());
   ASSERT_OK(array->ValidateFull());
   EXPECT_EQ(array->null_count(), 0);
   ASSERT_EQ(
@@ -833,7 +869,7 @@ TEST_F(ArrowBridgeArrayExportTest, dictionarySimple) {
       allocateIndices(3, pool_.get()),
       3,
       vectorMaker_.flatVector<int64_t>({1, 2, 3}));
-  auto array = toArrow(vec, pool_.get());
+  auto array = toArrow(vec, options_, pool_.get());
   ASSERT_OK(array->ValidateFull());
   ASSERT_EQ(*array->type(), *arrow::dictionary(arrow::int32(), arrow::int64()));
   auto& dict = static_cast<const arrow::DictionaryArray&>(*array);
@@ -859,7 +895,7 @@ TEST_F(ArrowBridgeArrayExportTest, dictionaryNested) {
     std::make_shared<ArrayVector>(
         pool_.get(), ARRAY(inner->type()), nullptr, 2, offsets, sizes, inner);
   });
-  auto array = toArrow(vec, pool_.get());
+  auto array = toArrow(vec, options_, pool_.get());
   ASSERT_OK(array->ValidateFull());
   ASSERT_EQ(
       *array->type(),
@@ -909,7 +945,7 @@ TEST_F(ArrowBridgeArrayExportTest, constantComplex) {
 TEST_F(ArrowBridgeArrayExportTest, constantCrossValidate) {
   auto vector =
       BaseVector::createConstant(VARCHAR(), "hello", 100, pool_.get());
-  auto array = toArrow(vector, pool_.get());
+  auto array = toArrow(vector, options_, pool_.get());
 
   ASSERT_OK(array->ValidateFull());
   EXPECT_EQ(array->null_count(), 0);
@@ -978,7 +1014,23 @@ class ArrowBridgeArrayImportTest : public ArrowBridgeArrayExportTest {
         if constexpr (std::is_same_v<T, bool>) {
           bits::setBit(rawValues, i, *inputValues[i]);
         } else if constexpr (std::is_same_v<T, Timestamp>) {
-          rawValues[i] = inputValues[i]->toNanos();
+          switch (options_.timestampUnit) {
+            case TimestampUnit::kSecond:
+              rawValues[i] = inputValues[i]->getSeconds();
+              break;
+            case TimestampUnit::kMilli:
+              rawValues[i] = inputValues[i]->toMillis();
+              break;
+            case TimestampUnit::kMicro:
+              rawValues[i] = inputValues[i]->toMicros();
+              break;
+            case TimestampUnit::kNano:
+              rawValues[i] = inputValues[i]->toNanos();
+              break;
+            default:
+              VELOX_USER_FAIL(fmt::format(
+                  "Timestamp unit not supported: {}.", options_.timestampUnit));
+          }
         } else {
           rawValues[i] = *inputValues[i];
         }
@@ -1091,9 +1143,46 @@ class ArrowBridgeArrayImportTest : public ArrowBridgeArrayExportTest {
 
     // Assert new vector contents.
     for (vector_size_t i = 0; i < convertedVector->size(); ++i) {
-      ASSERT_TRUE(expected->equalValueAt(convertedVector.get(), i, i))
-          << "at " << i << ": " << expected->toString(i) << " vs. "
-          << convertedVector->toString(i);
+      if constexpr (std::is_same_v<T, Timestamp>) {
+        if (expected->isNullAt(i)) {
+          ASSERT_TRUE(convertedVector->isNullAt(i))
+              << "at " << i << ": " << expected->toString(i) << " vs. "
+              << convertedVector->toString(i);
+        } else {
+          auto convertedFlat = convertedVector->asFlatVector<Timestamp>();
+          switch (options_.timestampUnit) {
+            case TimestampUnit::kSecond:
+              EXPECT_EQ(
+                  Timestamp(expected->valueAt(i).getSeconds(), 0),
+                  convertedFlat->valueAt(i))
+                  << "mismatch at index " << i;
+              break;
+            case TimestampUnit::kMilli:
+              EXPECT_EQ(
+                  Timestamp::fromMillis(expected->valueAt(i).toMillis()),
+                  convertedFlat->valueAt(i))
+                  << "mismatch at index " << i;
+              break;
+            case TimestampUnit::kMicro:
+              EXPECT_EQ(
+                  Timestamp::fromMicros(expected->valueAt(i).toMicros()),
+                  convertedFlat->valueAt(i))
+                  << "mismatch at index " << i;
+              break;
+            case TimestampUnit::kNano:
+              EXPECT_EQ(expected->valueAt(i), convertedFlat->valueAt(i))
+                  << "mismatch at index " << i;
+              break;
+            default:
+              VELOX_USER_FAIL(fmt::format(
+                  "Timestamp unit not supported: {}.", options_.timestampUnit));
+          }
+        }
+      } else {
+        ASSERT_TRUE(expected->equalValueAt(convertedVector.get(), i, i))
+            << "at " << i << ": " << expected->toString(i) << " vs. "
+            << convertedVector->toString(i);
+      }
     }
   }
 
@@ -1126,8 +1215,15 @@ class ArrowBridgeArrayImportTest : public ArrowBridgeArrayExportTest {
     testArrowImport<double>("g", {-99.9, 4.3, 31.1, 129.11, -12});
     testArrowImport<float>("f", {-99.9, 4.3, 31.1, 129.11, -12});
 
-    testArrowImport<Timestamp>(
-        "ttn", {Timestamp(0, 0), std::nullopt, Timestamp(1699308257, 1234)});
+    for (uint8_t unit :
+         {(uint8_t)TimestampUnit::kSecond,
+          (uint8_t)TimestampUnit::kMilli,
+          (uint8_t)TimestampUnit::kMicro,
+          (uint8_t)TimestampUnit::kNano}) {
+      options_.timestampUnit = static_cast<TimestampUnit>(unit);
+      testArrowImport<Timestamp>(
+          "ts", {Timestamp(0, 0), std::nullopt, Timestamp(1699308257, 1234)});
+    }
   }
 
   void testImportWithoutNullsBuffer() {
@@ -1304,8 +1400,8 @@ class ArrowBridgeArrayImportTest : public ArrowBridgeArrayExportTest {
       EXPECT_FALSE(schema.release);
       EXPECT_FALSE(data.release);
     }
-    velox::exportToArrow(vec, schema);
-    velox::exportToArrow(vec, data, pool_.get());
+    velox::exportToArrow(vec, schema, options_);
+    velox::exportToArrow(vec, data, pool_.get(), options_);
     ASSERT_OK_AND_ASSIGN(auto arrowType, arrow::ImportType(&schema));
     ASSERT_OK_AND_ASSIGN(auto array2, arrow::ImportArray(&data, arrowType));
     ASSERT_OK(array2->ValidateFull());
@@ -1427,6 +1523,7 @@ class ArrowBridgeArrayImportTest : public ArrowBridgeArrayExportTest {
   }
 
   std::shared_ptr<memory::MemoryPool> pool_{memory::addDefaultLeafMemoryPool()};
+  ArrowOptions options_;
 };
 
 class ArrowBridgeArrayImportAsViewerTest : public ArrowBridgeArrayImportTest {
@@ -1439,7 +1536,7 @@ class ArrowBridgeArrayImportAsViewerTest : public ArrowBridgeArrayImportTest {
       ArrowArray& arrowArray,
       memory::MemoryPool* pool) override {
     return facebook::velox::importFromArrowAsViewer(
-        arrowSchema, arrowArray, pool);
+        arrowSchema, arrowArray, options_, pool);
   }
 };
 
@@ -1486,7 +1583,7 @@ class ArrowBridgeArrayImportAsOwnerTest
       ArrowArray& arrowArray,
       memory::MemoryPool* pool) override {
     return facebook::velox::importFromArrowAsOwner(
-        arrowSchema, arrowArray, pool);
+        arrowSchema, arrowArray, options_, pool);
   }
 };
 
@@ -1529,7 +1626,8 @@ TEST_F(ArrowBridgeArrayImportAsOwnerTest, inputsMarkedReleased) {
   ArrowSchema arrowSchema = makeArrowSchema("i");
   ArrowArray arrowArray = makeArrowArray(buffers, 2, 4, 0);
 
-  auto _ = importFromArrowAsOwner(arrowSchema, arrowArray, pool_.get());
+  auto _ =
+      importFromArrowAsOwner(arrowSchema, arrowArray, options_, pool_.get());
 
   EXPECT_EQ(arrowSchema.release, nullptr);
   EXPECT_EQ(arrowArray.release, nullptr);
@@ -1562,7 +1660,10 @@ TEST_F(ArrowBridgeArrayImportAsOwnerTest, releaseCalled) {
 
   // Create a Velox Vector from Arrow and then destruct it to trigger the
   // release callback calling
-  { auto _ = importFromArrowAsOwner(arrowSchema, arrowArray, pool_.get()); }
+  {
+    auto _ =
+        importFromArrowAsOwner(arrowSchema, arrowArray, options_, pool_.get());
+  }
 
   EXPECT_TRUE(TestReleaseCalled::schemaReleaseCalled);
   EXPECT_TRUE(TestReleaseCalled::arrayReleaseCalled);
