@@ -25,6 +25,7 @@
 #include "velox/dwio/common/WriterFactory.h"
 #include "velox/dwio/parquet/writer/arrow/util/Compression.h"
 #include "velox/vector/ComplexVector.h"
+#include "velox/vector/arrow/Bridge.h"
 
 namespace facebook::velox::parquet {
 
@@ -98,6 +99,7 @@ struct WriterOptions {
   // policy with the configs in its ctor.
   std::function<std::unique_ptr<DefaultFlushPolicy>()> flushPolicyFactory;
   std::shared_ptr<CodecOptions> codecOptions;
+  uint8_t arrowBridgeTimestampUnit = static_cast<uint8_t>(TimestampUnit::kNano);
 };
 
 // Writes Velox vectors into  a DataSink using Arrow Parquet writer.
@@ -146,6 +148,7 @@ class Writer : public dwio::common::Writer {
   std::shared_ptr<ArrowContext> arrowContext_;
 
   std::unique_ptr<DefaultFlushPolicy> flushPolicy_;
+  ArrowOptions options_{.flattenDictionary = true, .flattenConstant = true};
 };
 
 class ParquetWriterFactory : public dwio::common::WriterFactory {
