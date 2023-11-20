@@ -248,7 +248,7 @@ const char* exportArrowFormatStr(
       return "z"; // binary
 
     case TypeKind::TIMESTAMP:
-      return "ttn"; // time64 [nanoseconds]
+      return "tsu:"; // time64 [nanoseconds]
     // Complex/nested types.
     case TypeKind::ARRAY:
       static_assert(sizeof(vector_size_t) == 4);
@@ -903,8 +903,7 @@ TypePtr importFromArrowImpl(
       return VARBINARY();
 
     case 't': // temporal types.
-      // Mapping it to ttn for now.
-      if (format[1] == 't' && format[2] == 'n') {
+      if (format[1] == 's') {
         return TIMESTAMP();
       }
       if (format[1] == 'd' && format[2] == 'D') {
