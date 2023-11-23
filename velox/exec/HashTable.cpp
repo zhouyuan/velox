@@ -520,11 +520,7 @@ void HashTable<ignoreNullKeys>::arrayGroupProbe(HashLookup& lookup) {
 template <bool ignoreNullKeys>
 void HashTable<ignoreNullKeys>::joinProbe(HashLookup& lookup) {
   if (hashMode_ == HashMode::kArray) {
-    for (auto row : lookup.rows) {
-      auto index = lookup.hashes[row];
-      DCHECK_LT(index, capacity_);
-      lookup.hits[row] = table_[index]; // NOLINT
-    }
+    arrayJoinProbe(lookup);
     return;
   }
   if (hashMode_ == HashMode::kNormalizedKey) {
@@ -562,6 +558,48 @@ void HashTable<ignoreNullKeys>::joinProbe(HashLookup& lookup) {
     state1.preProbe(tags_, sizeMask_, lookup.hashes[row], row);
     state1.firstProbe(table_, 0);
     fullProbe<true>(lookup, state1, false);
+  }
+}
+
+template <bool ignoreNullKeys>
+void HashTable<ignoreNullKeys>::arrayJoinProbe(HashLookup& lookup) {
+  // Rows are nearly always consecutive.
+  auto& rows = lookup.rows;
+  auto hashes = lookup.hashes.data();
+  auto hits = lookup.hits.data();
+  auto numRows = rows.size();
+  int32_t i = 0;
+  constexpr int32_t kBatchSize = xsimd::batch<int64_t>::size;
+  constexpr int32_t kStep = kBatchSize * 2;
+  // We loop 2 vectors at a time for fewer switches. The rows are in practice
+  // always contiguous.
+  for (; i + kStep <= numRows; i += kStep) {
+    auto firstRow = rows[i];
+    if (rows[i + kStep - 1] - firstRow == kStep - 1) {
+      // kStep consecutive.
+      simd::gather(
+          reinterpret_cast<const int64_t*>(table_),
+          reinterpret_cast<const int64_t*>(hashes + firstRow))
+          .store_unaligned(reinterpret_cast<int64_t*>(hits) + firstRow);
+      simd::gather(
+          reinterpret_cast<const int64_t*>(table_),
+          reinterpret_cast<const int64_t*>(hashes + firstRow + kBatchSize))
+          .store_unaligned(
+              reinterpret_cast<int64_t*>(hits) + firstRow + kBatchSize);
+    } else {
+      for (auto j = i; j < i + kStep; ++j) {
+        auto row = rows[j];
+        auto index = hashes[row];
+        VELOX_DCHECK_LT(index, capacity_);
+        hits[row] = table_[index]; // NOLINT
+      }
+    }
+  }
+  for (; i < numRows; ++i) {
+    auto row = rows[i];
+    auto index = hashes[row];
+    VELOX_DCHECK_LT(index, capacity_);
+    hits[row] = table_[index]; // NOLINT
   }
 }
 

@@ -625,6 +625,9 @@ class HashTable : public BaseHashTable {
   template <bool isJoin>
   void fullProbe(HashLookup& lookup, ProbeState& state, bool extraCheck);
 
+  // Array probe with SIMD.
+  void arrayJoinProbe(HashLookup& lookup);
+
   // Shortcut for probe with normalized keys.
   void joinNormalizedKeyProbe(HashLookup& lookup);
 
