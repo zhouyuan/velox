@@ -45,7 +45,7 @@ class ArrowStreamTest : public OperatorTestBase {
 
     int getNext(struct ArrowArray* outArray) {
       if (vectorIndex_ < vectors_.size()) {
-        exportToArrow(vectors_[vectorIndex_], *outArray, pool_.get());
+        exportToArrow(vectors_[vectorIndex_], options_, *outArray, pool_.get());
         vectorIndex_ += 1;
       } else {
         // End of stream. Mark the array released.
@@ -56,12 +56,13 @@ class ArrowStreamTest : public OperatorTestBase {
     }
 
     int getArrowSchema(ArrowSchema& out) {
-      exportToArrow(BaseVector::create(type_, 0, pool_.get()), out);
+      exportToArrow(BaseVector::create(type_, 0, pool_.get()), options_, out);
       return failGetSchema_ ? (int)ErrorCode::kGetSchemaFailed
                             : (int)ErrorCode::kNoError;
     }
 
    private:
+    BridgeOptions options_;
     const std::shared_ptr<memory::MemoryPool> pool_;
     const std::vector<RowVectorPtr>& vectors_;
     const TypePtr type_;

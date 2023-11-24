@@ -567,6 +567,8 @@ uint32_t HiveDataSink::appendWriter(const HiveWriterId& id) {
   options.maxDictionaryMemory =
       std::optional(HiveConfig::getOrcWriterMaxDictionaryMemory(
           connectorQueryCtx_->config(), connectorProperties_.get()));
+  options.arrowBridgeTimestampUnit =
+      HiveConfig::arrowBridgeTimestampUnit(connectorQueryCtx_->config());
   ioStats_.emplace_back(std::make_shared<io::IoStatistics>());
 
   // Prevents the memory allocation during the writer creation.

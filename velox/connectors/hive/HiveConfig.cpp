@@ -181,6 +181,11 @@ uint64_t HiveConfig::sortWriterMaxOutputBytes(const Config* config) {
   return config->get<uint64_t>(kSortWriterMaxOutputBytes, 10UL << 20);
 }
 
+// static.
+uint8_t HiveConfig::arrowBridgeTimestampUnit(const Config* config) {
+  return config->get<uint8_t>(kArrowBridgeTimestampUnit, 3 /* nano */);
+}
+
 uint64_t HiveConfig::getOrcWriterMaxStripeSize(
     const Config* connectorQueryCtxConfig,
     const Config* connectorPropertiesConfig) {

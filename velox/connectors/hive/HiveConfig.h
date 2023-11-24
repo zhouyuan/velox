@@ -127,6 +127,10 @@ class HiveConfig {
   static constexpr const char* kSortWriterMaxOutputBytes =
       "sort_writer_max_output_bytes";
 
+  // Timestamp unit used during Velox-Arrow conversion.
+  static constexpr const char* kArrowBridgeTimestampUnit =
+      "arrow.bridge.timestamp.unit";
+
   static InsertExistingPartitionsBehavior insertExistingPartitionsBehavior(
       const Config* config);
 
@@ -175,6 +179,10 @@ class HiveConfig {
   static uint32_t sortWriterMaxOutputRows(const Config* config);
 
   static uint64_t sortWriterMaxOutputBytes(const Config* config);
+
+  /// Returns the timestamp unit used in Velox-Arrow conversion.
+  /// 0: second, 1: milli, 2: micro, 3: nano.
+  static uint8_t arrowBridgeTimestampUnit(const Config* config);
 
   static uint64_t getOrcWriterMaxStripeSize(
       const Config* connectorQueryCtxConfig,

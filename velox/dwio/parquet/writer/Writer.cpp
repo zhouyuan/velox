@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include "velox/vector/arrow/Bridge.h"
-
 #include <arrow/c/bridge.h>
 #include <arrow/io/interfaces.h>
 #include <arrow/table.h>
@@ -144,9 +142,10 @@ namespace {
 void exportToArrow(
     const TypePtr& type,
     std::shared_ptr<memory::MemoryPool> pool,
+    BridgeOptions options,
     ArrowSchema& out) {
   auto leafPool = pool->addLeafChild("parquet-write-schema-convert");
-  exportToArrow(BaseVector::create(type, 0, leafPool.get()), out);
+  exportToArrow(BaseVector::create(type, 0, leafPool.get()), options, out);
 }
 
 } // namespace
@@ -168,9 +167,12 @@ Writer::Writer(
     flushPolicy_ = std::make_unique<DefaultFlushPolicy>();
   }
 
+  options_.timestampUnit =
+      static_cast<TimestampUnit>(options.arrowBridgeTimestampUnit);
+
   if (options.schema) {
     ArrowSchema arrowSchema;
-    exportToArrow(options.schema, pool_, arrowSchema);
+    exportToArrow(options.schema, pool_,  options_, arrowSchema);
 
     PARQUET_ASSIGN_OR_THROW(
         arrowContext_->schema, ::arrow::ImportSchema(&arrowSchema));
@@ -252,8 +254,8 @@ dwio::common::StripeProgress getStripeProgress(
 void Writer::write(const VectorPtr& data) {
   ArrowArray array;
   ArrowSchema schema;
-  exportToArrow(data, array, generalPool_.get());
-  exportToArrow(data, schema);
+  exportToArrow(data, options_, array, generalPool_.get());
+  exportToArrow(data, options_, schema);
   PARQUET_ASSIGN_OR_THROW(
       auto recordBatch, ::arrow::ImportRecordBatch(&array, &schema));
   if (!arrowContext_->schema) {
@@ -311,6 +313,10 @@ parquet::WriterOptions getParquetOptions(
   parquetOptions.memoryPool = options.memoryPool;
   if (options.compressionKind.has_value()) {
     parquetOptions.compression = options.compressionKind.value();
+  }
+  if (options.arrowBridgeTimestampUnit.has_value()) {
+    parquetOptions.arrowBridgeTimestampUnit =
+        options.arrowBridgeTimestampUnit.value();
   }
   return parquetOptions;
 }

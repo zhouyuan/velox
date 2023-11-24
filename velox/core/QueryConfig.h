@@ -338,6 +338,10 @@ class QueryConfig {
   static constexpr const char* kEnableExpressionEvaluationCache =
       "enable_expression_evaluation_cache";
 
+  // Timestamp unit used during Velox-Arrow conversion.
+  static constexpr const char* kArrowBridgeTimestampUnit =
+      "arrow_bridge_timestamp_unit";
+
   uint64_t queryMaxMemoryPerNode() const {
     return toCapacity(
         get<std::string>(kQueryMaxMemoryPerNode, "0B"), CapacityUnit::BYTE);
@@ -547,6 +551,13 @@ class QueryConfig {
   uint8_t spillStartPartitionBit() const {
     constexpr uint8_t kDefaultStartBit = 29;
     return get<uint8_t>(kSpillStartPartitionBit, kDefaultStartBit);
+  }
+
+  /// Returns the timestamp unit used in Velox-Arrow conversion.
+  /// 0: second, 1: milli, 2: micro, 3: nano.
+  uint8_t arrowBridgeTimestampUnit() const {
+    constexpr uint8_t kDefaultUnit = 3;
+    return get<uint8_t>(kArrowBridgeTimestampUnit, kDefaultUnit);
   }
 
   /// Returns the number of bits used to calculate the spilling partition
