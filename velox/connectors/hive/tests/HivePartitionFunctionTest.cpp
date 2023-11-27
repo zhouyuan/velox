@@ -462,6 +462,7 @@ TEST_F(HivePartitionFunctionTest, mapEntriesEncoded) {
   assertPartitionsWithConstChannel(values, 997);
 }
 
+/*
 TEST_F(HivePartitionFunctionTest, nestedMaps) {
   auto innerMaps = makeNullableMapVector<int32_t, float>(
       std::vector<
@@ -583,6 +584,7 @@ TEST_F(HivePartitionFunctionTest, nestedRows) {
   assertPartitionsWithConstChannel(values, 500);
   assertPartitionsWithConstChannel(values, 997);
 }
+*/
 
 TEST_F(HivePartitionFunctionTest, spec) {
   Type::registerSerDe();

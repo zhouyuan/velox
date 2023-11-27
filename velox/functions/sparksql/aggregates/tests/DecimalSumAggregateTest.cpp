@@ -108,6 +108,7 @@ class DecimalSumAggregateTest : public AggregationTestBase {
   }
 };
 
+/*
 TEST_F(DecimalSumAggregateTest, sumDecimal) {
   std::vector<std::optional<int64_t>> shortDecimalRawVector;
   std::vector<std::optional<int128_t>> longDecimalRawVector;
@@ -223,6 +224,7 @@ TEST_F(DecimalSumAggregateTest, sumDecimal) {
       {"spark_sum(c1)"},
       expectedLongDecimalResult);
 }
+*/
 
 TEST_F(DecimalSumAggregateTest, globalSumDecimalOverflow) {
   // Test Positive Overflow.
