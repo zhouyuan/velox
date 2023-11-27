@@ -40,8 +40,8 @@ jobs:
           sed -i 's/sudo --preserve-env apt/apt/g' ./scripts/setup-ubuntu.sh
           TZ=Asia/Shanghai ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && ./scripts/setup-ubuntu.sh 
           mkdir -p ~/adapter-deps/install
-          DEPENDENCY_DIR=~/adapter-deps PROMPT_ALWAYS_RESPOND=n ./scripts/setup-adapters.sh 
-          make debug EXTRA_CMAKE_FLAGS="-DVELOX_ENABLE_PARQUET=ON -DVELOX_BUILD_TESTING=ON -DVELOX_BUILD_TEST_UTILS=ON -DVELOX_ENABLE_HDFS=ON -DVELOX_ENABLE_S3=ON" AWSSDK_ROOT_DIR=~/adapter-deps/install
+          DEPENDENCY_DIR=~/adapter-deps PROMPT_ALWAYS_RESPOND=n ./scripts/setup-adapters.sh gcs aws hdfs
+          make debug EXTRA_CMAKE_FLAGS="-DVELOX_ENABLE_PARQUET=ON -DVELOX_BUILD_TESTING=ON -DVELOX_BUILD_TEST_UTILS=ON -DVELOX_ENABLE_HDFS=ON -DVELOX_ENABLE_S3=ON -DVELOX_ENABLE_GCS=ON" AWSSDK_ROOT_DIR=~/adapter-deps/install
           export JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk-amd64/
           export HADOOP_ROOT_LOGGER="WARN,DRFA"
           export LIBHDFS3_CONF=$(pwd)/.circleci/hdfs-client.xml
