@@ -172,7 +172,7 @@ Writer::Writer(
 
   if (options.schema) {
     ArrowSchema arrowSchema;
-    exportToArrow(options.schema, pool_,  options_, arrowSchema);
+    exportToArrow(options.schema, pool_, options_, arrowSchema);
 
     PARQUET_ASSIGN_OR_THROW(
         arrowContext_->schema, ::arrow::ImportSchema(&arrowSchema));
