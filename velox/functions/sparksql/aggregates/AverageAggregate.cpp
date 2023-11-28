@@ -282,7 +282,13 @@ class DecimalAverageAggregate : public DecimalAggregate<TInputType> {
         avg, validSum.value(), countDecimal, false, sumRescale, 0);
     bool isOverflow = false;
     return DecimalUtil::rescaleWithRoundUp<int128_t, TResultType>(
-        avg, avgPrecision, avgScale, resultPrecision, resultScale, isOverflow);
+        avg,
+        avgPrecision,
+        avgScale,
+        resultPrecision,
+        resultScale,
+        isOverflow,
+        false);
   }
 
  private:
