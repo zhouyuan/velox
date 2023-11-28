@@ -108,7 +108,6 @@ class DecimalSumAggregateTest : public AggregationTestBase {
   }
 };
 
-/*
 TEST_F(DecimalSumAggregateTest, sumDecimal) {
   std::vector<std::optional<int64_t>> shortDecimalRawVector;
   std::vector<std::optional<int128_t>> longDecimalRawVector;
@@ -126,7 +125,9 @@ TEST_F(DecimalSumAggregateTest, sumDecimal) {
       {input},
       {},
       {"spark_sum(c0)", "spark_sum(c1)"},
-      "SELECT sum(c0), sum(c1) FROM tmp");
+      "SELECT sum(c0), sum(c1) FROM tmp",
+      /*config*/ {},
+      /*testWithTableScan*/ false);
 
   // Short decimal sum aggregation with multiple groups.
   auto inputShortDecimalRows = {
@@ -170,7 +171,9 @@ TEST_F(DecimalSumAggregateTest, sumDecimal) {
       inputShortDecimalRows,
       {"c0"},
       {"spark_sum(c1)"},
-      expectedShortDecimalResult);
+      expectedShortDecimalResult,
+      /*config*/ {},
+      /*testWithTableScan*/ false);
 
   // Long decimal sum aggregation with multiple groups.
   auto inputLongDecimalRows = {
@@ -222,9 +225,10 @@ TEST_F(DecimalSumAggregateTest, sumDecimal) {
       inputLongDecimalRows,
       {"c0"},
       {"spark_sum(c1)"},
-      expectedLongDecimalResult);
+      expectedLongDecimalResult,
+      /*config*/ {},
+      /*testWithTableScan*/ false);
 }
-*/
 
 TEST_F(DecimalSumAggregateTest, globalSumDecimalOverflow) {
   // Test Positive Overflow.
