@@ -508,6 +508,11 @@ TEST_F(ParquetTableScanTest, structSelection) {
   loadData(
       getExampleFilePath("contacts.parquet"),
       ROW({"name"}, {ROW({"middle", "last"}, {VARCHAR(), VARCHAR()})}),
+      makeRowVector(
+          {"t"},
+          {
+              vector,
+          }));
   assertSelectWithFilter({"name"}, {}, "", "SELECT (null, 'Jones')");
 
   loadData(
@@ -618,6 +623,33 @@ TEST_F(ParquetTableScanTest, timestampFilter) {
           "",
           "SELECT t from tmp where t < TIMESTAMP '2000-09-12 22:36:29'"),
       "testInt128() is not supported");
+}
+
+TEST_F(ParquetTableScanTest, timestampINT96) {
+  auto a = makeFlatVector<Timestamp>({Timestamp(1, 0), Timestamp(2, 0)});
+  auto expected = makeRowVector({"time"}, {a});
+  createDuckDbTable("expected", {expected});
+
+  auto vector = makeArrayVector<Timestamp>({{}});
+  loadData(
+      getExampleFilePath("timestamp_dict_int96.parquet"),
+      ROW({"time"}, {TIMESTAMP()}),
+      makeRowVector(
+          {"time"},
+          {
+              vector,
+          }));
+  assertSelect({"time"}, "SELECT time from expected");
+
+  loadData(
+      getExampleFilePath("timestamp_plain_int96.parquet"),
+      ROW({"time"}, {TIMESTAMP()}),
+      makeRowVector(
+          {"time"},
+          {
+              vector,
+          }));
+  assertSelect({"time"}, "SELECT time from expected");
 }
 
 int main(int argc, char** argv) {

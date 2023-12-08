@@ -398,14 +398,8 @@ void PageReader::prepareDictionary(const PageHeader& pageHeader) {
             &days,
             parquetValues + i * sizeof(Int96Timestamp) + sizeof(uint64_t),
             sizeof(int32_t));
-        int64_t seconds = (days - Timestamp::kJulianToUnixEpochDays) *
-            Timestamp::kSecondsPerDay;
-        if (nanos > Timestamp::kMaxNanos) {
-          seconds += nanos / Timestamp::kNanosInSecond;
-          nanos -=
-              (nanos / Timestamp::kNanosInSecond) * Timestamp::kNanosInSecond;
-        }
-        values[i] = Timestamp(seconds, nanos);
+
+        values[i] = Timestamp::fromDaysAndNanos(days, nanos);
       }
       break;
     }
