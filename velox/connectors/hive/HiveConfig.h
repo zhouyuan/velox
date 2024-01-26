@@ -175,6 +175,10 @@ class HiveConfig {
   static constexpr const char* kSortWriterMaxOutputBytesSession =
       "sort_writer_max_output_bytes";
 
+  // Timestamp unit used during Velox-Arrow conversion.
+  static constexpr const char* kArrowBridgeTimestampUnit =
+      "arrow_bridge_timestamp_unit";
+
   InsertExistingPartitionsBehavior insertExistingPartitionsBehavior(
       const Config* session) const;
 
@@ -241,6 +245,10 @@ class HiveConfig {
   uint64_t footerEstimatedSize() const;
 
   uint64_t filePreloadThreshold() const;
+
+  /// Returns the timestamp unit used in Velox-Arrow conversion.
+  /// 0: second, 3: milli, 6: micro, 9: nano.
+  uint8_t arrowBridgeTimestampUnit(const Config* session) const;
 
   HiveConfig(std::shared_ptr<const Config> config) {
     VELOX_CHECK_NOT_NULL(

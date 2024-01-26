@@ -202,4 +202,9 @@ uint64_t HiveConfig::filePreloadThreshold() const {
   return config_->get<uint64_t>(kFilePreloadThreshold, 8UL << 20);
 }
 
+// static.
+uint8_t HiveConfig::arrowBridgeTimestampUnit(const Config* session) const {
+  return session->get<uint8_t>(kArrowBridgeTimestampUnit, 9 /* nano */);
+}
+
 } // namespace facebook::velox::connector::hive
