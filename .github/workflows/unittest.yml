@@ -17,7 +17,7 @@ jobs:
       - run: apt-get update && apt-get install ca-certificates -y && update-ca-certificates
       - run: sed -i 's/http\:\/\/archive.ubuntu.com/https\:\/\/mirrors.ustc.edu.cn/g' /etc/apt/sources.list
       - run: apt-get update
-      - run: apt-get install -y cmake ccache build-essential ninja-build sudo
+      - run: apt-get install -y cmake ccache build-essential ninja-build sudo rpm curl
       - run: apt-get install -y libboost-all-dev libcurl4-openssl-dev
       - run: apt-get install -y libssl-dev flex libfl-dev git openjdk-8-jdk axel *thrift* libkrb5-dev libgsasl7-dev libuuid1 uuid-dev
       - run: apt-get install -y libz-dev
