@@ -11,13 +11,14 @@ jobs:
 
   velox-test:
     runs-on: self-hosted
-    container: ubuntu:22.04
+    container: ubuntu:20.04
     steps:
       - uses: actions/checkout@v2
       - run: apt-get update && apt-get install ca-certificates -y && update-ca-certificates
       - run: sed -i 's/http\:\/\/archive.ubuntu.com/https\:\/\/mirrors.ustc.edu.cn/g' /etc/apt/sources.list
       - run: apt-get update
-      - run: apt-get install -y cmake ccache build-essential ninja-build sudo rpm curl g++-12
+      - run: TZ=Asia/Shanghai ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone 
+      - run: apt-get install -y cmake ccache build-essential ninja-build sudo rpm curl 
       - run: apt-get install -y libboost-all-dev libcurl4-openssl-dev
       - run: apt-get install -y libssl-dev flex libfl-dev git openjdk-8-jdk axel *thrift* libkrb5-dev libgsasl7-dev libuuid1 uuid-dev
       - run: apt-get install -y libz-dev
@@ -43,7 +44,6 @@ jobs:
           DEPENDENCY_DIR=~/adapter-deps PROMPT_ALWAYS_RESPOND=n ./scripts/setup-adapters.sh gcs aws hdfs
           #make debug EXTRA_CMAKE_FLAGS="-DVELOX_ENABLE_PARQUET=ON -DVELOX_BUILD_TESTING=ON -DVELOX_BUILD_TEST_UTILS=ON -DVELOX_ENABLE_HDFS=ON -DVELOX_ENABLE_S3=ON -DVELOX_ENABLE_GCS=ON" AWSSDK_ROOT_DIR=~/adapter-deps/install
           #make debug EXTRA_CMAKE_FLAGS="-DVELOX_ENABLE_PARQUET=ON -DVELOX_BUILD_TESTING=ON -DVELOX_BUILD_TEST_UTILS=ON" 
-          export CXX=/usr/bin/g++-12
           make EXTRA_CMAKE_FLAGS="-DVELOX_ENABLE_PARQUET=ON -DVELOX_BUILD_TESTING=ON -DVELOX_BUILD_TEST_UTILS=ON"
           export JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk-amd64/
           export HADOOP_ROOT_LOGGER="WARN,DRFA"
