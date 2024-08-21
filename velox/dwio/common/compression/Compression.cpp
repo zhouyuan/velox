@@ -23,6 +23,9 @@
 #include <lz4.h>
 #include <snappy.h>
 #include <zlib.h>
+#ifdef VELOX_ENABLE_ISAL
+#include <isa-l/igzip_lib.h>
+#endif
 #include <zstd.h>
 #include <zstd_errors.h>
 
@@ -125,15 +128,25 @@ class ZlibDecompressor : public Decompressor {
 
  protected:
   void reset() {
+#ifdef VELOX_ENABLE_ISAL
+    memset(&isal_stream_, 0, sizeof(isal_stream_));
+    isal_stream_.crc_flag = ISAL_GZIP;
+#else
     auto result = inflateReset(&zstream_);
     DWIO_ENSURE_EQ(
         result,
         Z_OK,
         "Bad inflateReset in ZlibDecompressor::reset. error: ",
         result);
+#endif
   }
 
-  z_stream zstream_;
+
+#ifdef VELOX_ENABLE_ISAL
+    inflate_state isal_stream_;
+#else
+    z_stream zstream_;
+#endif
 };
 
 ZlibDecompressor::ZlibDecompressor(
@@ -142,6 +155,10 @@ ZlibDecompressor::ZlibDecompressor(
     const std::string& streamDebugInfo,
     bool isGzip)
     : Decompressor{blockSize, streamDebugInfo} {
+#ifdef VELOX_ENABLE_ISAL
+    memset(&isal_stream_, 0, sizeof(isal_stream_));
+    isal_stream_.crc_flag = ISAL_GZIP;
+#else
   zstream_.next_in = Z_NULL;
   zstream_.avail_in = 0;
   zstream_.zalloc = Z_NULL;
@@ -162,6 +179,7 @@ ZlibDecompressor::ZlibDecompressor(
       result,
       " Info: ",
       streamDebugInfo_);
+#endif
 }
 
 ZlibDecompressor::~ZlibDecompressor() {
@@ -179,6 +197,16 @@ uint64_t ZlibDecompressor::decompress(
     uint64_t srcLength,
     char* dest,
     uint64_t destLength) {
+#ifdef VELOX_ENABLE_ISAL
+    isal_stream_.next_in =
+        const_cast<Bytef*>(reinterpret_cast<const Bytef*>(src));
+    isal_stream_.avail_in = folly::to<uInt>(srcLength);
+    isal_stream_.next_out =
+        reinterpret_cast<Bytef*>(dest);
+    isal_stream_.avail_out = folly::to<uInt>(destLength);
+    auto ret = isal_inflate_stateless(&isal_stream_);
+    return destLength - isal_stream_.avail_out;
+#else
   reset();
   zstream_.next_in = reinterpret_cast<Bytef*>(const_cast<char*>(src));
   zstream_.avail_in = folly::to<uInt>(srcLength);
@@ -191,6 +219,7 @@ uint64_t ZlibDecompressor::decompress(
       "Error in ZlibDecompressor::decompress. error: ",
       result);
   return destLength - zstream_.avail_out;
+#endif
 }
 
 class LzoAndLz4DecompressorCommon : public Decompressor {

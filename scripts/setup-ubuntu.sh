@@ -72,7 +72,8 @@ function install_build_prerequisites {
     ninja-build \
     checkinstall \
     git \
-    wget
+    wget \
+    nasm
 
   # Install to /usr/local to make it available to all users.
   ${SUDO} pip3 install cmake==3.28.3

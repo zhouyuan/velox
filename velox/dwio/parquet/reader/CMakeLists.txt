@@ -37,3 +37,10 @@ velox_link_libraries(
   Snappy::snappy
   thrift
   zstd::zstd)
+
+if(VELOX_ENABLE_ISAL)
+velox_link_libraries(
+  velox_dwio_native_parquet_reader
+  ISAL::isal
+)
+endif()
