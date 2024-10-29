@@ -24,7 +24,10 @@ add_subdirectory(row)
 add_subdirectory(flag_definitions)
 add_subdirectory(external/date)
 add_subdirectory(external/md5)
-add_subdirectory(external/hdfs)
+
+if(${VELOX_ENABLE_HDFS})
+  add_subdirectory(external/hdfs)
+endif()
 #
 
 # examples depend on expression

@@ -34,3 +34,14 @@ if(VELOX_ENABLE_HDFS)
     add_subdirectory(tests)
   endif()
 endif()
+
+if(VELOX_ENABLE_HDFS3)
+  velox_sources(
+    velox_hdfs
+    PRIVATE
+    HdfsFileSystem.cpp
+    HdfsReadFile.cpp
+    HdfsWriteFile.cpp)
+  velox_link_libraries(velox_hdfs Folly::folly ${LIBHDFS3} xsimd)
+
+endif()

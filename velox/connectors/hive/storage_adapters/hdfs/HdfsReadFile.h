@@ -15,23 +15,37 @@
  */
 
 #include "velox/common/file/File.h"
-#include "velox/external/hdfs/hdfs.h"
+#ifdef VELOX_ENABLE_HDFS
+#include "velox/external/hdfs/HdfsInternal.h"
+#endif
+
+#ifdef VELOX_ENABLE_HDFS3
+#include <hdfs/hdfs.h>
+#endif
 
 namespace facebook::velox {
 
+#ifdef VELOX_ENABLE_HDFS
 namespace filesystems::arrow::io::internal {
 class LibHdfsShim;
 }
+#endif
 
 /**
  * Implementation of hdfs read file.
  */
 class HdfsReadFile final : public ReadFile {
  public:
+#ifdef VELOX_ENABLE_HDFS
   explicit HdfsReadFile(
       filesystems::arrow::io::internal::LibHdfsShim* driver,
       hdfsFS hdfs,
       std::string_view path);
+#endif
+
+#ifdef VELOX_ENABLE_HDFS3
+  explicit HdfsReadFile(hdfsFS hdfs, std::string_view path);
+#endif
   ~HdfsReadFile() override;
 
   std::string_view pread(uint64_t offset, uint64_t length, void* buf)
@@ -57,7 +71,9 @@ class HdfsReadFile final : public ReadFile {
   void preadInternal(uint64_t offset, uint64_t length, char* pos) const;
   void checkFileReadParameters(uint64_t offset, uint64_t length) const;
 
+#ifdef VELOX_ENABLE_HDFS
   filesystems::arrow::io::internal::LibHdfsShim* driver_;
+#endif
   hdfsFS hdfsClient_;
   hdfsFileInfo* fileInfo_;
   std::string filePath_;

@@ -111,6 +111,7 @@ option(VELOX_ENABLE_S3 "Build S3 Connector" OFF)
 option(VELOX_ENABLE_GCS "Build GCS Connector" OFF)
 option(VELOX_ENABLE_ABFS "Build Abfs Connector" OFF)
 option(VELOX_ENABLE_HDFS "Build Hdfs Connector" OFF)
+option(VELOX_ENABLE_HDFS3 "Build Hdfs3 Connector" OFF)
 option(VELOX_ENABLE_PARQUET "Enable Parquet support" OFF)
 option(VELOX_ENABLE_ARROW "Enable Arrow support" OFF)
 option(VELOX_ENABLE_REMOTE_FUNCTIONS "Enable remote function support" OFF)
@@ -262,6 +263,19 @@ if(VELOX_ENABLE_HDFS)
   add_definitions(-DVELOX_ENABLE_HDFS)
   # JVM libhdfs requires arrow dependency.
   set(VELOX_ENABLE_ARROW ON)
+endif()
+
+if(VELOX_ENABLE_HDFS3)
+  find_package(libhdfs3)
+  if(libhdfs3_FOUND AND TARGET HDFS::hdfs3)
+    set(LIBHDFS3 HDFS::hdfs3)
+  else()
+    find_library(
+      LIBHDFS3
+      NAMES libhdfs3.so libhdfs3.dylib
+      HINTS "${CMAKE_SOURCE_DIR}/hawq/depends/libhdfs3/_build/src/" REQUIRED)
+  endif()
+  add_definitions(-DVELOX_ENABLE_HDFS3)
 endif()
 
 if(VELOX_ENABLE_PARQUET)

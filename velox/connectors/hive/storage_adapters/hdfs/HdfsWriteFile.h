@@ -16,18 +16,27 @@
 #pragma once
 
 #include "velox/common/file/File.h"
-#include "velox/external/hdfs/hdfs.h"
+#ifdef VELOX_ENABLE_HDFS
+#include "velox/external/hdfs/HdfsInternal.h"
+#endif
+
+#ifdef VELOX_ENABLE_HDFS3
+#include <hdfs/hdfs.h>
+#endif
 
 namespace facebook::velox {
 
+#ifdef VELOX_ENABLE_HDFS
 namespace filesystems::arrow::io::internal {
 class LibHdfsShim;
 }
+#endif
 
 /// Implementation of hdfs write file. Nothing written to the file should be
 /// read back until it is closed.
 class HdfsWriteFile : public WriteFile {
  public:
+#ifdef VELOX_ENABLE_HDFS
   /// The constructor.
   /// @param hdfsClient The configured hdfs filesystem handle.
   /// @param path The file path to write.
@@ -44,6 +53,25 @@ class HdfsWriteFile : public WriteFile {
       int bufferSize = 0,
       short replication = 0,
       int blockSize = 0);
+#endif
+
+#ifdef VELOX_ENABLE_HDFS3
+  /// The constructor.
+  /// @param hdfsClient The configured hdfs filesystem handle.
+  /// @param path The file path to write.
+  /// @param bufferSize Size of buffer for write - pass 0 if you want
+  /// to use the default configured values.
+  /// @param replication Block replication - pass 0 if you want to use
+  /// the default configured values.
+  /// @param blockSize Size of block - pass 0 if you want to use the
+  /// default configured values.
+  HdfsWriteFile(
+      hdfsFS hdfsClient,
+      std::string_view path,
+      int bufferSize = 0,
+      short replication = 0,
+      int blockSize = 0);
+#endif
 
   ~HdfsWriteFile() override;
 
@@ -60,7 +88,9 @@ class HdfsWriteFile : public WriteFile {
   void close() override;
 
  private:
+#ifdef VELOX_ENABLE_HDFS
   filesystems::arrow::io::internal::LibHdfsShim* driver_;
+#endif
   /// The configured hdfs filesystem handle.
   hdfsFS hdfsClient_;
   /// The hdfs file handle for write.

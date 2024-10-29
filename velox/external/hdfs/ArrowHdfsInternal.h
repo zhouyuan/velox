@@ -21,7 +21,7 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "hdfs.h"
+#include "HdfsInternal.h"
 
 #include <arrow/status.h>
 

@@ -18,7 +18,13 @@
 #include "velox/common/config/Config.h"
 #include "velox/connectors/hive/storage_adapters/hdfs/HdfsReadFile.h"
 #include "velox/connectors/hive/storage_adapters/hdfs/HdfsWriteFile.h"
+#ifdef VELOX_ENABLE_HDFS
 #include "velox/external/hdfs/ArrowHdfsInternal.h"
+#endif
+
+#ifdef VELOX_ENABLE_HDFS3
+#include <hdfs/hdfs.h>
+#endif
 
 namespace facebook::velox::filesystems {
 std::string_view HdfsFileSystem::kScheme("hdfs://");
@@ -29,6 +35,7 @@ class HdfsFileSystem::Impl {
   explicit Impl(
       const config::ConfigBase* config,
       const HdfsServiceEndpoint& endpoint) {
+#ifdef VELOX_ENABLE_HDFS
     auto status = filesystems::arrow::io::internal::ConnectLibHdfs(&driver_);
     if (!status.ok()) {
       LOG(ERROR) << "ConnectLibHdfs failed ";
@@ -45,28 +52,58 @@ class HdfsFileSystem::Impl {
         "Unable to connect to HDFS: {}, got error: {}.",
         endpoint.identity(),
         driver_->GetLastExceptionRootCause());
+#endif
+
+#ifdef VELOX_ENABLE_HDFS3
+    auto builder = hdfsNewBuilder();
+    hdfsBuilderSetNameNode(builder, endpoint.host.c_str());
+    hdfsBuilderSetNameNodePort(builder, atoi(endpoint.port.data()));
+    hdfsClient_ = hdfsBuilderConnect(builder);
+    hdfsFreeBuilder(builder);
+    VELOX_CHECK_NOT_NULL(
+        hdfsClient_,
+        "Unable to connect to HDFS: {}, got error: {}.",
+        endpoint.identity(),
+        hdfsGetLastError());
+#endif
   }
 
   ~Impl() {
     LOG(INFO) << "Disconnecting HDFS file system";
+#ifdef VELOX_ENABLE_HDFS
     int disconnectResult = driver_->Disconnect(hdfsClient_);
     if (disconnectResult != 0) {
       LOG(WARNING) << "hdfs disconnect failure in HdfsReadFile close: "
                    << errno;
     }
+
+#endif
+
+#ifdef VELOX_ENABLE_HDFS3
+    int disconnectResult = hdfsDisconnect(hdfsClient_);
+    if (disconnectResult != 0) {
+      LOG(WARNING) << "hdfs disconnect failure in HdfsReadFile close: "
+                   << errno;
+    }
+
+#endif
   }
 
   hdfsFS hdfsClient() {
     return hdfsClient_;
   }
 
+#ifdef VELOX_ENABLE_HDFS
   filesystems::arrow::io::internal::LibHdfsShim* hdfsShim() {
     return driver_;
   }
+#endif
 
  private:
   hdfsFS hdfsClient_;
+#ifdef VELOX_ENABLE_HDFS
   filesystems::arrow::io::internal::LibHdfsShim* driver_;
+#endif
 };
 
 HdfsFileSystem::HdfsFileSystem(
@@ -90,15 +127,27 @@ std::unique_ptr<ReadFile> HdfsFileSystem::openFileForRead(
     path.remove_prefix(index);
   }
 
+#ifdef VELOX_ENABLE_HDFS
   return std::make_unique<HdfsReadFile>(
       impl_->hdfsShim(), impl_->hdfsClient(), path);
+#endif
+
+#ifdef VELOX_ENABLE_HDFS3
+  return std::make_unique<HdfsReadFile>(impl_->hdfsClient(), path);
+#endif
 }
 
 std::unique_ptr<WriteFile> HdfsFileSystem::openFileForWrite(
     std::string_view path,
     const FileOptions& /*unused*/) {
+#ifdef VELOX_ENABLE_HDFS
   return std::make_unique<HdfsWriteFile>(
       impl_->hdfsShim(), impl_->hdfsClient(), path);
+#endif
+
+#ifdef VELOX_ENABLE_HDFS3
+  return std::make_unique<HdfsWriteFile>(impl_->hdfsClient(), path);
+#endif
 }
 
 bool HdfsFileSystem::isHdfsFile(const std::string_view filePath) {
