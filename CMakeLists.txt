@@ -272,7 +272,7 @@ if(VELOX_ENABLE_HDFS3)
   else()
     find_library(
       LIBHDFS3
-      NAMES libhdfs3.so libhdfs3.dylib
+      NAMES libhdfs3.so libhdfs3.a libhdfs3.dylib
       HINTS "${CMAKE_SOURCE_DIR}/hawq/depends/libhdfs3/_build/src/" REQUIRED)
   endif()
   add_definitions(-DVELOX_ENABLE_HDFS3)
