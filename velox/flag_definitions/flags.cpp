@@ -22,7 +22,7 @@
 
 DEFINE_int32(
     velox_memory_num_shared_leaf_pools,
-    32,
+    0,
     "Number of shared leaf memory pools per process");
 
 DEFINE_bool(
