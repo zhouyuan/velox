@@ -430,8 +430,7 @@ velox_set_source(Boost)
 velox_resolve_dependency(Boost 1.77.0 COMPONENTS ${BOOST_INCLUDE_LIBRARIES})
 
 velox_set_source(gflags)
-
-velox_resolve_dependency(gflags)
+velox_resolve_dependency(gflags COMPONENTS ${VELOX_GFLAGS_TYPE})
 
 if(NOT TARGET gflags::gflags)
   # This is a bit convoluted, but we want to be able to use gflags::gflags as a
