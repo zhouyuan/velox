@@ -164,6 +164,7 @@ class HashTableTest : public testing::TestWithParam<bool>,
         estimatedTableSize,
         topTable_->rows()->pool()->usedBytes() - usedMemoryBytes);
     ASSERT_EQ(topTable_->hashMode(), mode);
+    ASSERT_EQ(topTable_->stats().hashMode, folly::to_underlying(mode));
     ASSERT_EQ(topTable_->allRows().size(), numWays);
     uint64_t rowCount{0};
     for (auto* rowContainer : topTable_->allRows()) {
