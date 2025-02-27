@@ -821,6 +821,7 @@ TEST_P(HashTableTest, arrayProbeNormalizedKey) {
     rows.updateBounds();
     insertGroups(*data, rows, *lookup, *table);
     EXPECT_LE(table->stats().numDistinct, table->testingRehashSize());
+    EXPECT_EQ(table->stats().hashMode, 2);
   }
 
   ASSERT_EQ(table->hashMode(), BaseHashTable::HashMode::kNormalizedKey);

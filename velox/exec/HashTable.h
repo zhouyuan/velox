@@ -109,7 +109,7 @@ struct HashTableStats {
   int64_t numDistinct{0};
   /// Counts the number of tombstone table slots.
   int64_t numTombstones{0};
-  int64_t hahsmode{0};
+  int64_t hashMode{0};
 };
 
 class BaseHashTable {
@@ -567,7 +567,7 @@ class HashTable : public BaseHashTable {
 
   HashTableStats stats() const override {
     return HashTableStats{
-        capacity_, numRehashes_, numDistinct_, numTombstones_, hashMode_};
+        capacity_, numRehashes_, numDistinct_, numTombstones_, folly::to_underlying(hashMode_)};
   }
 
   bool hasDuplicateKeys() const override {
