@@ -343,7 +343,7 @@ static void __matches(std::istream& __input, std::string_view __expected) {
     __input.get();
 
   int64_t __result = __parse_integral(__input, true);
-  if (__result > static_cast<int64_t>(date::year::max())) {
+  if (__result > static_cast<int>(date::year::max())) {
     if (__negative)
       std::__throw_runtime_error(
           "corrupt tzdb year: year is less than the minimum");
@@ -708,6 +708,10 @@ static void __parse_zone(
   } while (std::isdigit(__input.peek()) || __input.peek() == '-');
 
   std::filesystem::path __root = __libcpp_tzdb_directory();
+  if (!std::filesystem::exists(__root/ __p->__name())) {
+    // in case the zonefile does not exists
+    return;
+  }
   std::ifstream zone_file{__root / __p->__name()};
   date::populate_transitions(__p->transitions(), __p->ttinfos(), zone_file);
 
