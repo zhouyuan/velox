@@ -176,7 +176,7 @@ function get_cxx_flags {
         echo -n "-march=armv8-a+crc+crypto "
       fi
     else
-      echo -n ""
+      echo -n "-march=armv8-a+crc+crypto"
     fi
     ;;
   *)
