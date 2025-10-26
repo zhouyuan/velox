@@ -47,7 +47,7 @@ function install_folly {
   # Folly Portability.h being used to decide whether or not support coroutines
   # causes issues (build, link) if the selection is not consistent across users of folly.
   # shellcheck disable=SC2034
-  EXTRA_PKG_CXXFLAGS=" -DFOLLY_CFG_NO_COROUTINES"
+  EXTRA_PKG_CXXFLAGS=" -DFOLLY_CFG_NO_COROUTINES -DFOLLY_NO_EXCEPTION_TRACER=OFF"
   wget_and_untar https://github.com/facebook/folly/archive/refs/tags/"${FB_OS_VERSION}".tar.gz folly
   cmake_install_dir folly -DBUILD_SHARED_LIBS="$VELOX_BUILD_SHARED" -DBUILD_TESTS=OFF -DFOLLY_HAVE_INT128_T=ON
 }
