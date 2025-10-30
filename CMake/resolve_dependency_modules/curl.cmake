@@ -28,4 +28,9 @@ string(
 
 velox_resolve_dependency_url(CURL)
 
+# Use block so we don't leak variables
+block(SCOPE_FOR VARIABLES)
 FetchContent_Declare(curl URL ${VELOX_CURL_SOURCE_URL} URL_HASH ${VELOX_CURL_BUILD_SHA256_CHECKSUM})
+FetchContent_MakeAvailable(curl)
+unset(BUILD_SHARED_LIBS)
+endblock()
