@@ -56,6 +56,7 @@ jobs:
             export CCACHE_DIR=/work/.ccache
             export CCACHE_SLOPPINESS=file_macro,locale,time_macros
             mkdir -p /work/.ccache
+            ccache -M 1G
             ccache -sz
             source /opt/rh/devtoolset-11/enable
             source /opt/rh/rh-git227/enable
