@@ -42,7 +42,7 @@ jobs:
       - name: Setup Gluten
         run: |
           git clone --depth 1 https://github.com/apache/incubator-gluten gluten && cd gluten
-          sed -i 's/ibm/ibm-xxx/g' ep/build-velox/src/get-velox.sh
+          sed -i 's/ibm/ibm-xxx/gI' ep/build-velox/src/get-velox.sh
           BRANCH=$(echo ${GITHUB_REF#refs/heads/})
           # sed -i 's/VELOX_BRANCH=2025.*/VELOX_BRANCH=${BRANCH}/g' ep/build-velox/src/get-velox.sh
       - name: Build Gluten native libraries
