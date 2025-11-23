@@ -43,7 +43,6 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/apache/incubator-gluten gluten && cd gluten
           BRANCH=$(echo ${GITHUB_REF#refs/heads/})
-          sed -i 's/oap-project/IBM/g' ep/build-velox/src/get-velox.sh
           # sed -i 's/VELOX_BRANCH=2025.*/VELOX_BRANCH=${BRANCH}/g' ep/build-velox/src/get-velox.sh
       - name: Build Gluten native libraries
         run: |
@@ -52,7 +51,10 @@ jobs:
             git config --global --add safe.directory /work
             set -e
             df -a
+            cd /work
+            git log -n 3
             cd /work/gluten
+            git log -n 3
             export CCACHE_DIR=/work/.ccache
             export CCACHE_SLOPPINESS=file_macro,locale,time_macros
             mkdir -p /work/.ccache
@@ -62,7 +64,10 @@ jobs:
             source /opt/rh/rh-git227/enable
             export NUM_THREADS=4
             ./dev/builddeps-veloxbe.sh --enable_vcpkg=ON --build_arrow=OFF --build_tests=OFF --build_benchmarks=OFF \
-                           --build_examples=OFF --enable_s3=ON --enable_gcs=ON --enable_hdfs=ON --enable_abfs=ON --velox_home=/work
+                           --build_examples=OFF --enable_s3=ON --enable_gcs=ON --enable_hdfs=ON --enable_abfs=ON --velox_home=/work               
+            pushd /work
+            git log -n 3
+            popd
             ccache -s
             mkdir -p /work/.m2/repository/org/apache/arrow/
             cp -r /root/.m2/repository/org/apache/arrow/* /work/.m2/repository/org/apache/arrow/
