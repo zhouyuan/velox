@@ -74,6 +74,7 @@ jobs:
             cp -r /root/.m2/repository/org/apache/arrow/* /work/.m2/repository/org/apache/arrow/
           "
       - name: "Save ccache"
+        if: always()
         uses: actions/cache/save@v4
         id: ccache
         with:
