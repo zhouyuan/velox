@@ -9010,6 +9010,7 @@ DEBUG_ONLY_TEST_P(HashJoinTest, reuseHashTable) {
           {}, /*dependentTypes*/
           true /*allowDuplicates*/,
           true /*hasProbedFlag*/,
+	  false,
           1 /*minTableSizeForParallelJoinBuild*/,
           pool());
 
