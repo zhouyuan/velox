@@ -25,6 +25,7 @@ target_link_libraries(
   velox_dwio_json_reader_register
   velox_dwio_common
   velox_dwio_common_exception
+  velox_dwio_common_test_utils
   velox_memory
   velox_type
   velox_vector

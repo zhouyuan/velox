@@ -415,9 +415,10 @@ void JsonRowReader::parseJsonValue(
     case TypeKind::VARBINARY: {
       auto flatVector = data->asFlatVector<StringView>();
       if (value.isString()) {
-        flatVector->set(row, StringView(value.asString()));
+        flatVector->set(row, StringView(std::string_view(value.asString())));
       } else {
-        flatVector->set(row, StringView(folly::toJson(value)));
+	auto tmpJson = folly::toJson(value);
+        flatVector->set(row, StringView(tmpJson));
       }
       break;
     }
@@ -554,10 +555,10 @@ const ColumnSelector& JsonRowReader::getColumnSelector() const {
 }
 
 std::shared_ptr<const TypeWithId> JsonRowReader::getSelectedType() const {
-  if (!selectedSchema_) {
-    selectedSchema_ = TypeWithId::create(
-        columnSelector_.buildSelected(), schemaWithId_->maxId() + 1);
-  }
+  //if (!selectedSchema_) {
+  //  selectedSchema_ = TypeWithId::create(
+  //      columnSelector_.buildSelected(), schemaWithId_->maxId() + 1);
+  //}
   return selectedSchema_;
 }
 

@@ -29,8 +29,14 @@ using namespace facebook::velox::dwio::common;
 using namespace facebook::velox::json;
 
 class JsonReaderTest : public testing::Test {
+
  protected:
+  std::string getExampleFilePath(const std::string& fileName) {
+      return test::getDataFilePath("", 
+          "velox/dwio/json/tests/reader/examples/" + fileName);
+  }
   void SetUp() override {
+    memory::MemoryManager::testingSetInstance(memory::MemoryManager::Options{});
     pool_ = memory::memoryManager()->addLeafPool();
     registerJsonReaderFactory();
   }
@@ -55,7 +61,7 @@ TEST_F(JsonReaderTest, SimpleTypes) {
   auto testFilePath = getExampleFilePath("simple_types.json");
 
   // Create reader options
-  ReaderOptions readerOpts{pool_.get()};
+  dwio::common::ReaderOptions readerOpts{pool_.get()};
   readerOpts.setFileSchema(schema);
 
   // Create buffered input
@@ -71,7 +77,7 @@ TEST_F(JsonReaderTest, SimpleTypes) {
   ASSERT_EQ(reader->rowType()->nameOf(1), "name");
 
   // Create row reader
-  RowReaderOptions rowReaderOpts;
+  dwio::common::RowReaderOptions rowReaderOpts;
   auto rowReader = reader->createRowReader(rowReaderOpts);
 
   // Read data
@@ -118,7 +124,7 @@ TEST_F(JsonReaderTest, NestedTypes) {
   auto testFilePath = getExampleFilePath("nested_types.json");
 
   // Create reader options
-  ReaderOptions readerOpts{pool_.get()};
+  dwio::common::ReaderOptions readerOpts{pool_.get()};
   readerOpts.setFileSchema(schema);
 
   // Create buffered input
@@ -129,7 +135,7 @@ TEST_F(JsonReaderTest, NestedTypes) {
   auto reader = std::make_unique<JsonReader>(readerOpts, std::move(input));
 
   // Create row reader
-  RowReaderOptions rowReaderOpts;
+  dwio::common::RowReaderOptions rowReaderOpts;
   auto rowReader = reader->createRowReader(rowReaderOpts);
 
   // Read data
@@ -159,8 +165,6 @@ TEST_F(JsonReaderTest, NestedTypes) {
   EXPECT_EQ(metadataVector->sizeAt(0), 2);
 }
 
-std::string JsonReaderTest::getExampleFilePath(const std::string& fileName) {
-  return "examples/" + fileName;
-}
+
 
 // Made with Bob
