@@ -1,0 +1,2 @@
+{"id": 1, "name": "Alice", "scores": [85, 90, 95], "metadata": {"city": "NYC", "country": "USA"}}
+{"id": 2, "name": "Bob", "scores": [70, 75, 80], "metadata": {"city": "LA", "country": "USA"}}
