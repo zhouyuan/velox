@@ -332,7 +332,7 @@ uint64_t JsonRowReader::next(
         resizeVector(childVector, rowsRead);
         
         if (childVector) {
-          auto fieldName = ct->type()->asRow().nameOf(i);
+	  auto fieldName = contents_->schema->nameOf(i);
           if (jsonObj.count(fieldName)) {
             parseJsonValue(
                 jsonObj[fieldName], ct->type(), rct->type(), childVector, rowsRead);
@@ -555,10 +555,9 @@ const ColumnSelector& JsonRowReader::getColumnSelector() const {
 }
 
 std::shared_ptr<const TypeWithId> JsonRowReader::getSelectedType() const {
-  //if (!selectedSchema_) {
-  //  selectedSchema_ = TypeWithId::create(
-  //      columnSelector_.buildSelected(), schemaWithId_->maxId() + 1);
-  //}
+  if (!selectedSchema_) {
+    selectedSchema_ = columnSelector_.buildSelected();
+  }
   return selectedSchema_;
 }
 
