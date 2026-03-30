@@ -215,7 +215,7 @@ class SparkCollectSetAggregate
   // the final node doesn't receive the boolean constant, so it uses this
   // default — which is safe because the partial node already handles null
   // filtering based on the actual constant value.
-  bool ignoreNulls_{false};
+  bool ignoreNulls_{true};
 };
 
 std::unique_ptr<exec::Aggregate> createSetAgg(
