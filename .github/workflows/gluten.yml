@@ -18,6 +18,9 @@ on:
   pull_request:
     paths:
       - .github/workflows/gluten.yml
+  schedule:
+    - cron: '0 0 * * *'
+
 env:
   MVN_CMD: ./build/mvn -ntp
 
@@ -123,7 +126,9 @@ jobs:
           export JAVA_HOME=/usr/lib/jvm/java-17-openjdk
           export PATH=$JAVA_HOME/bin:$PATH
           java -version
-          $MVN_CMD clean package -Pspark-3.5 -Pbackends-velox -Piceberg -Pdelta -Phudi -DskipTests
+          $MVN_CMD clean package -Pspark-3.5 -Pbackends-velox -Piceberg -Pdelta -Phudi -Ppaimon -Pspark-ut \
+          -DargLine="-Dspark.test.home=/opt/shims/spark35/spark_home/" \
+          -DtagsToExclude=org.apache.spark.tags.ExtendedSQLTest,org.apache.gluten.tags.UDFTest,org.apache.gluten.tags.EnhancedFeaturesTest,org.apache.gluten.tags.SkipTest
 
   spark-test-spark34-slow:
     needs: gluten-cpp-build
