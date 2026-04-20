@@ -8,7 +8,7 @@ set(VCPKG_BUILD_TYPE release)
 set(VCPKG_POLICY_ONLY_RELEASE_CRT enabled)
 
 set(VCPKG_C_FLAGS "")
-set(VCPKG_CXX_FLAGS "-std=c++20 -Wno-missing-template-arg-list-after-template-kw")
+set(VCPKG_CXX_FLAGS "-std=c++20")
 
 # Build glog and gflags as shared libraries to avoid dual flag registration
 # when .so plugins are dlopen'd
