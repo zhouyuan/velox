@@ -30,6 +30,18 @@ if(POLICY CMP0135)
   set(CMAKE_POLICY_DEFAULT_CMP0135 NEW)
 endif()
 
+# vcpkg integration: configure ccache *before* project() so that the compiler
+# launcher is applied to all targets and compile rules from the start.
+if(DEFINED CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES "vcpkg")
+  find_program(CCACHE_PROGRAM ccache)
+  if(CCACHE_PROGRAM)
+    message(STATUS "vcpkg build: enabling ccache early: ${CCACHE_PROGRAM}")
+    set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    set(CMAKE_CUDA_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+  endif()
+endif()
+
 # Set the project name.
 project(velox)
 
@@ -44,14 +56,6 @@ if(DEFINED CMAKE_TOOLCHAIN_FILE AND CMAKE_TOOLCHAIN_FILE MATCHES "vcpkg")
     set(VCPKG_MANIFEST_DIR "${PROJECT_SOURCE_DIR}/dev/vcpkg" CACHE PATH "vcpkg manifest directory")
   endif()
   message(STATUS "vcpkg manifest directory: ${VCPKG_MANIFEST_DIR}")
-
-  # Enable ccache for Velox build when using vcpkg
-  find_program(CCACHE_PROGRAM ccache)
-  if(CCACHE_PROGRAM)
-    set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
-    set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
-    message(STATUS "Using ccache for Velox build: ${CCACHE_PROGRAM}")
-  endif()
 endif()
 
 # If we are in an active conda env disable search in system paths and add env to
