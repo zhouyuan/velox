@@ -40,6 +40,7 @@ velox_add_library(
   GroupId.cpp
   GroupingSet.cpp
   HashAggregation.cpp
+  MultiGroupingSetHashAggregation.cpp
   HashBuild.cpp
   HashJoinBridge.cpp
   HashPartitionFunction.cpp
