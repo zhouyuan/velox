@@ -86,6 +86,7 @@ set(
   ColumnStatsCollectorTest.cpp
   MixedUnionTest.cpp
   ExpandTest.cpp
+  MultiGroupingSetHashAggregationTest.cpp
   FunctionResolutionTest.cpp
   SpillStatsTest.cpp
   MarkSortedTest.cpp

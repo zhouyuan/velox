@@ -372,6 +372,16 @@ class QueryConfig {
       80,
       "Abandon partial aggregation if reduction percentage exceeds this.")
 
+  VELOX_QUERY_CONFIG(
+      kInlineGroupingSetsAggregation,
+      inlineGroupingSetsAggregation,
+      "inline_grouping_sets_aggregation",
+      bool,
+      true,
+      "When true, fuses Expand + HashAggregation into a single "
+      "MultiGroupingSetHashAggregation operator, avoiding N-fold "
+      "row replication for ROLLUP/CUBE/GROUPING SETS queries.")
+
   /// Memory threshold in bytes for triggering string compaction during
   /// global aggregation. Disabled by default (0).
   VELOX_QUERY_CONFIG(
