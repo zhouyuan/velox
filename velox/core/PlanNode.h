@@ -1417,6 +1417,117 @@ class AggregationNode : public PlanNode {
   const RowTypePtr outputType_;
 };
 
+
+/// Aggregation node that supports multiple grouping sets (ROLLUP, CUBE, GROUPING SETS)
+/// without requiring a separate Expand node. This is more efficient than the
+/// Expand + Aggregation pattern as it avoids materializing expanded rows.
+///
+/// Each grouping set specifies which grouping keys are active (true) or should be
+/// treated as null (false). The operator processes each input row multiple times,
+/// once per grouping set, with the appropriate keys masked.
+///
+/// Example for ROLLUP(k1, k2):
+///   groupingSets = [[true, true], [true, false], [false, false]]
+///   groupingSetIds = [0, 1, 3]  // Bitmask representation
+///
+/// The grouping_id column is automatically added to distinguish between different
+/// grouping sets in the output.
+class GroupingSetAggregationNode : public PlanNode {
+ public:
+  /// @param groupingSets For each grouping set, a boolean mask indicating which
+  /// grouping keys are active. Length of each mask must equal groupingKeys.size().
+  /// @param groupingSetIds The grouping_id value for each grouping set, typically
+  /// a bitmask where bit i indicates whether key i is present.
+  GroupingSetAggregationNode(
+      const PlanNodeId& id,
+      AggregationNode::Step step,
+      const std::vector<FieldAccessTypedExprPtr>& groupingKeys,
+      const std::vector<std::vector<bool>>& groupingSets,
+      const std::vector<int64_t>& groupingSetIds,
+      const std::vector<std::string>& aggregateNames,
+      const std::vector<AggregationNode::Aggregate>& aggregates,
+      bool ignoreNullKeys,
+      PlanNodePtr source);
+
+  const std::vector<PlanNodePtr>& sources() const override {
+    return sources_;
+  }
+
+  void accept(const PlanNodeVisitor& visitor, PlanNodeVisitorContext& context)
+      const override;
+
+  const RowTypePtr& outputType() const override {
+    return outputType_;
+  }
+
+  AggregationNode::Step step() const {
+    return step_;
+  }
+
+  const std::vector<FieldAccessTypedExprPtr>& groupingKeys() const {
+    return groupingKeys_;
+  }
+
+  /// Returns the grouping set specifications. Each inner vector is a boolean mask
+  /// indicating which grouping keys are active for that grouping set.
+  const std::vector<std::vector<bool>>& groupingSets() const {
+    return groupingSets_;
+  }
+
+  /// Returns the grouping_id value for each grouping set.
+  const std::vector<int64_t>& groupingSetIds() const {
+    return groupingSetIds_;
+  }
+
+  const std::vector<std::string>& aggregateNames() const {
+    return aggregateNames_;
+  }
+
+  const std::vector<AggregationNode::Aggregate>& aggregates() const {
+    return aggregates_;
+  }
+
+  bool ignoreNullKeys() const {
+    return ignoreNullKeys_;
+  }
+
+  std::string_view name() const override {
+    return "GroupingSetAggregation";
+  }
+
+  bool canSpill(const QueryConfig& queryConfig) const override;
+
+  folly::dynamic serialize() const override;
+
+  static PlanNodePtr create(const folly::dynamic& obj, void* context);
+
+ private:
+  void addDetails(std::stringstream& stream) const override;
+
+  void addSummaryDetails(
+      const std::string& indentation,
+      const PlanSummaryOptions& options,
+      std::stringstream& stream) const override;
+
+  const AggregationNode::Step step_;
+  const std::vector<FieldAccessTypedExprPtr> groupingKeys_;
+  
+  // For each grouping set, a boolean mask indicating which keys are active.
+  // groupingSets_[i][j] = true means key j is active in grouping set i.
+  const std::vector<std::vector<bool>> groupingSets_;
+  
+  // The grouping_id value for each grouping set (typically a bitmask).
+  const std::vector<int64_t> groupingSetIds_;
+  
+  const std::vector<std::string> aggregateNames_;
+  const std::vector<AggregationNode::Aggregate> aggregates_;
+  const bool ignoreNullKeys_;
+
+  const std::vector<PlanNodePtr> sources_;
+  const RowTypePtr outputType_;
+};
+
+using GroupingSetAggregationNodePtr = std::shared_ptr<const GroupingSetAggregationNode>;
 using AggregationNodePtr = std::shared_ptr<const AggregationNode>;
 
 inline std::ostream& operator<<(
@@ -6128,6 +6239,10 @@ class PlanNodeVisitor {
 
   virtual void visit(const ExpandNode& node, PlanNodeVisitorContext& ctx)
       const = 0;
+
+  virtual void visit(
+      const GroupingSetAggregationNode& node,
+      PlanNodeVisitorContext& ctx) const = 0;
 
   virtual void visit(const FilterNode& node, PlanNodeVisitorContext& ctx)
       const = 0;

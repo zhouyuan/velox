@@ -507,6 +507,218 @@ PlanNodePtr AggregationNode::create(const folly::dynamic& obj, void* context) {
       deserializeSingleSource(obj, context));
 }
 
+// GroupingSetAggregationNode implementation
+
+GroupingSetAggregationNode::GroupingSetAggregationNode(
+    const PlanNodeId& id,
+    AggregationNode::Step step,
+    const std::vector<FieldAccessTypedExprPtr>& groupingKeys,
+    const std::vector<std::vector<bool>>& groupingSets,
+    const std::vector<int64_t>& groupingSetIds,
+    const std::vector<std::string>& aggregateNames,
+    const std::vector<AggregationNode::Aggregate>& aggregates,
+    bool ignoreNullKeys,
+    PlanNodePtr source)
+    : PlanNode(id),
+      step_(step),
+      groupingKeys_(groupingKeys),
+      groupingSets_(groupingSets),
+      groupingSetIds_(groupingSetIds),
+      aggregateNames_(aggregateNames),
+      aggregates_(aggregates),
+      ignoreNullKeys_(ignoreNullKeys),
+      sources_{source} {
+  VELOX_USER_CHECK_GT(
+      groupingSets_.size(),
+      0,
+      "GroupingSetAggregationNode requires at least one grouping set");
+  
+  VELOX_USER_CHECK_EQ(
+      groupingSets_.size(),
+      groupingSetIds_.size(),
+      "Number of grouping sets must match number of grouping set IDs");
+
+  // Validate that each grouping set mask has the correct length
+  for (size_t i = 0; i < groupingSets_.size(); ++i) {
+    VELOX_USER_CHECK_EQ(
+        groupingSets_[i].size(),
+        groupingKeys_.size(),
+        "Grouping set {} mask length {} must match number of grouping keys {}",
+        i,
+        groupingSets_[i].size(),
+        groupingKeys_.size());
+  }
+
+  // Build output type: grouping keys + grouping_id + aggregates
+  std::vector<std::string> names;
+  std::vector<TypePtr> types;
+
+  // Add grouping keys
+  names.reserve(groupingKeys_.size() + 1 + aggregateNames_.size());
+  types.reserve(groupingKeys_.size() + 1 + aggregateNames_.size());
+  
+  for (const auto& key : groupingKeys_) {
+    names.push_back(key->name());
+    types.push_back(key->type());
+  }
+
+  // Add grouping_id column
+  names.push_back("grouping_id");
+  types.push_back(BIGINT());
+
+  // Add aggregates
+  for (size_t i = 0; i < aggregates_.size(); ++i) {
+    names.push_back(aggregateNames_[i]);
+    types.push_back(aggregates_[i].call->type());
+  }
+
+  outputType_ = ROW(std::move(names), std::move(types));
+}
+
+void GroupingSetAggregationNode::addDetails(std::stringstream& stream) const {
+  stream << stepName(step_) << " ";
+
+  if (!groupingKeys_.empty()) {
+    stream << "[";
+    addFields(stream, groupingKeys_);
+    stream << "] ";
+  }
+
+  stream << aggregateNames_.size() << " aggregates";
+  
+  stream << " " << groupingSets_.size() << " grouping sets";
+}
+
+void GroupingSetAggregationNode::addSummaryDetails(
+    const std::string& indentation,
+    const PlanSummaryOptions& options,
+    std::stringstream& stream) const {
+  stream << indentation << stepName(step_) << std::endl;
+
+  if (!groupingKeys_.empty()) {
+    stream << indentation << "  Grouping keys: ";
+    addFields(stream, groupingKeys_);
+    stream << std::endl;
+  }
+
+  stream << indentation << "  Grouping sets: " << groupingSets_.size()
+         << std::endl;
+  
+  for (size_t i = 0; i < groupingSets_.size(); ++i) {
+    stream << indentation << "    Set " << i << " (id=" << groupingSetIds_[i]
+           << "): [";
+    bool first = true;
+    for (size_t j = 0; j < groupingSets_[i].size(); ++j) {
+      if (groupingSets_[i][j]) {
+        if (!first) stream << ", ";
+        stream << groupingKeys_[j]->name();
+        first = false;
+      }
+    }
+    stream << "]" << std::endl;
+  }
+
+  if (!aggregates_.empty()) {
+    stream << indentation << "  Aggregates:" << std::endl;
+    for (auto i = 0; i < aggregates_.size(); ++i) {
+      stream << indentation << "    " << aggregateNames_[i] << " := "
+             << aggregates_[i].call->toString();
+      if (aggregates_[i].mask) {
+        stream << " (mask: " << aggregates_[i].mask->name() << ")";
+      }
+      if (!aggregates_[i].sortingKeys.empty()) {
+        stream << " (order by: ";
+        addFields(stream, aggregates_[i].sortingKeys);
+        stream << ")";
+      }
+      if (aggregates_[i].distinct) {
+        stream << " (distinct)";
+      }
+      stream << std::endl;
+    }
+  }
+}
+
+bool GroupingSetAggregationNode::canSpill(const QueryConfig& queryConfig) const {
+  return queryConfig.aggregationSpillEnabled();
+}
+
+void GroupingSetAggregationNode::accept(
+    const PlanNodeVisitor& visitor,
+    PlanNodeVisitorContext& context) const {
+  visitor.visit(*this, context);
+}
+
+folly::dynamic GroupingSetAggregationNode::serialize() const {
+  auto obj = PlanNode::serialize();
+  obj["step"] = stepName(step_);
+  obj["groupingKeys"] = ISerializable::serialize(groupingKeys_);
+  
+  // Serialize grouping sets as array of arrays
+  auto groupingSetsArray = folly::dynamic::array();
+  for (const auto& set : groupingSets_) {
+    auto setArray = folly::dynamic::array();
+    for (bool active : set) {
+      setArray.push_back(active);
+    }
+    groupingSetsArray.push_back(setArray);
+  }
+  obj["groupingSets"] = groupingSetsArray;
+  
+  // Serialize grouping set IDs
+  auto idsArray = folly::dynamic::array();
+  for (int64_t id : groupingSetIds_) {
+    idsArray.push_back(id);
+  }
+  obj["groupingSetIds"] = idsArray;
+  
+  obj["aggregateNames"] = ISerializable::serialize(aggregateNames_);
+  obj["aggregates"] = ISerializable::serialize(aggregates_);
+  obj["ignoreNullKeys"] = ignoreNullKeys_;
+  obj["sources"] = ISerializable::serialize(sources_);
+  
+  return obj;
+}
+
+// static
+PlanNodePtr GroupingSetAggregationNode::create(
+    const folly::dynamic& obj,
+    void* context) {
+  auto groupingKeys = deserializeFields(obj["groupingKeys"], context);
+  
+  // Deserialize grouping sets
+  std::vector<std::vector<bool>> groupingSets;
+  for (const auto& setObj : obj["groupingSets"]) {
+    std::vector<bool> set;
+    for (const auto& val : setObj) {
+      set.push_back(val.asBool());
+    }
+    groupingSets.push_back(std::move(set));
+  }
+  
+  // Deserialize grouping set IDs
+  std::vector<int64_t> groupingSetIds;
+  for (const auto& id : obj["groupingSetIds"]) {
+    groupingSetIds.push_back(id.asInt());
+  }
+  
+  auto aggregateNames = deserializeStrings(obj["aggregateNames"]);
+  auto aggregates = ISerializable::deserialize<
+      std::vector<AggregationNode::Aggregate>>(obj["aggregates"], context);
+
+  return std::make_shared<GroupingSetAggregationNode>(
+      deserializePlanNodeId(obj),
+      toStep(obj["step"].asString()),
+      groupingKeys,
+      groupingSets,
+      groupingSetIds,
+      aggregateNames,
+      aggregates,
+      obj["ignoreNullKeys"].asBool(),
+      deserializeSingleSource(obj, context));
+}
+
+
 namespace {
 RowTypePtr getExpandOutputType(
     const std::vector<std::vector<TypedExprPtr>>& projections,
