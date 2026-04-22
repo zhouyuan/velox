@@ -9,12 +9,7 @@ vcpkg_extract_source_archive_ex(
     ARCHIVE "${ARCHIVE}"
 )
 
-# Add Clang-specific warning suppression flag
-if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    set(DUCKDB_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-missing-template-arg-list-after-template-kw")
-else()
-    set(DUCKDB_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-endif()
+set(DUCKDB_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-missing-template-arg-list-after-template-kw")
 
 vcpkg_configure_cmake(
     SOURCE_PATH "${SOURCE_PATH}"

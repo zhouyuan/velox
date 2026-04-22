@@ -25,6 +25,7 @@
 #include "velox/exec/FilterProject.h"
 #include "velox/exec/GroupId.h"
 #include "velox/exec/HashAggregation.h"
+#include "velox/exec/MultiGroupingSetHashAggregation.h"
 #include "velox/exec/HashBuild.h"
 #include "velox/exec/HashProbe.h"
 #include "velox/exec/IndexLookupJoin.h"
@@ -601,14 +602,12 @@ std::shared_ptr<Driver> DriverFactory::createDriver(
       }
 
       if (precedingExpand) {
-        // FUSED PATH: skip the separate Expand operator, create fused operator.
+        // FUSED PATH: Expand operator was skipped, create fused operator.
         // The pipeline for this node is:
         //   ... → MultiGroupingSetHashAggregation
-        // (no Expand operator created at all)
+        // (no separate Expand operator)
         operators.push_back(std::make_unique<MultiGroupingSetHashAggregation>(
             id, ctx.get(), aggregationNode, precedingExpand));
-        // Mark the expand node as consumed so LocalPlanner skips it.
-        skipNextNode = true;
       } else if (aggregationNode->isPreGrouped()) {
         operators.push_back(std::make_unique<StreamingAggregation>(
             id, ctx.get(), aggregationNode));
@@ -619,7 +618,30 @@ std::shared_ptr<Driver> DriverFactory::createDriver(
     } else if (
         auto expandNode =
             std::dynamic_pointer_cast<const core::ExpandNode>(planNode)) {
-      operators.push_back(std::make_unique<Expand>(id, ctx.get(), expandNode));
+      // Check if this Expand will be fused with a following Aggregation
+      bool willBeFused = false;
+      if (ctx->queryConfig().inlineGroupingSetsAggregation() &&
+          i + 1 < planNodes.size()) {
+        auto nextNode = planNodes[i + 1];
+        if (auto aggNode =
+                std::dynamic_pointer_cast<const core::AggregationNode>(nextNode)) {
+          if (!aggNode->isPreGrouped() && aggNode->sources()[0] == expandNode) {
+            // Check if this is a grouping-sets Expand
+            const auto& projs = expandNode->projections();
+            bool allHaveGid = !projs.empty() &&
+                std::all_of(projs.begin(), projs.end(), [](const auto& row) {
+                  return !row.empty() &&
+                      dynamic_cast<const core::ConstantTypedExpr*>(
+                          row.back().get()) != nullptr;
+                });
+            willBeFused = allHaveGid;
+          }
+        }
+      }
+      
+      if (!willBeFused) {
+        operators.push_back(std::make_unique<Expand>(id, ctx.get(), expandNode));
+      }
     } else if (
         auto groupIdNode =
             std::dynamic_pointer_cast<const core::GroupIdNode>(planNode)) {

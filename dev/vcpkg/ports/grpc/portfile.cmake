@@ -42,11 +42,7 @@ vcpkg_check_features(
 )
 
 # Add Clang-specific warning suppression flag
-if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    set(GRPC_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-missing-template-arg-list-after-template-kw")
-else()
-    set(GRPC_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-endif()
+set(GRPC_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-missing-template-arg-list-after-template-kw")
 
 vcpkg_cmake_configure(
     SOURCE_PATH "${SOURCE_PATH}"

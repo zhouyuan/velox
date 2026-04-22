@@ -1,4 +1,5 @@
 #include "velox/exec/MultiGroupingSetHashAggregation.h"
+#include "velox/exec/Aggregate.h"
 #include "velox/exec/AggregateInfo.h"
 #include "velox/exec/HashAggregation.h" // for AggregateInfo helpers
 #include "velox/exec/OperatorType.h"
@@ -25,15 +26,15 @@ MultiGroupingSetHashAggregation::MultiGroupingSetHashAggregation(
           aggregationNode->outputType(),
           operatorId,
           aggregationNode->id(),
-          OperatorType::kHashAggregation),
+          OperatorType::kAggregation),
       aggregationNode_(aggregationNode),
       expandNode_(expandNode) {
   const auto& projections = expandNode_->projections();
   numGroupingSets_ = static_cast<int32_t>(projections.size());
-  VELOX_CHECK_GT(
+  VELOX_CHECK_GE(
       numGroupingSets_,
       1,
-      "MultiGroupingSetHashAggregation requires at least 2 grouping sets");
+      "MultiGroupingSetHashAggregation requires at least 1 grouping set");
 
   const auto& inputType = expandNode_->inputType();
   // Last column of each projection row is the grouping_id constant.
@@ -61,34 +62,33 @@ MultiGroupingSetHashAggregation::MultiGroupingSetHashAggregation(
     }
   }
 
-  isPartialOutput_ =
-      aggregationNode_->step() == core::AggregationNode::Step::kPartial ||
-      aggregationNode_->step() == core::AggregationNode::Step::kSingle;
+  isPartialOutput_ = isPartialOutput(aggregationNode_->step());
 }
 
 void MultiGroupingSetHashAggregation::initialize() {
   Operator::initialize();
-  // Build GroupingSet with a key schema prepended by grouping_id.
-  // grouping_id is always the last groupingKey in aggregationNode_ when
-  // coming from an Expand node — we rely on that ordering from the planner.
+  // Build GroupingSet with the Expand node's output type as input.
+  // The Expand output contains: original columns + key columns + grouping_id
   //
-  // Build hashers: one per groupingExpression in aggregationNode_.
-  std::vector<std::unique_ptr<VectorHasher>> hashers;
+  // Build hashers using the actual column positions of grouping keys in the
+  // expand output type. Keys are referenced by name and may not be at
+  // sequential positions (e.g. k1=0, k2=1, gid=4 when non-key cols appear
+  // between them in the expand output).
   const auto& groupingKeys = aggregationNode_->groupingKeys();
-  hashers.reserve(groupingKeys.size());
-  for (column_index_t i = 0; i < groupingKeys.size(); ++i) {
-    hashers.push_back(VectorHasher::create(groupingKeys[i]->type(), i));
-  }
+  auto hashers =
+      createVectorHashers(expandNode_->outputType(), groupingKeys);
 
   // Re-use the HashAggregation helper to build AggregateInfo list.
+  std::shared_ptr<core::ExpressionEvaluator> expressionEvaluator;
   auto aggregates = toAggregateInfo(
-      aggregationNode_->aggregates(),
-      aggregationNode_->aggregateNames(),
-      aggregationNode_->step(),
-      operatorCtx_->pool());
+      *aggregationNode_,
+      *operatorCtx_,
+      groupingKeys.size(),
+      expressionEvaluator);
 
+  // The input type for GroupingSet is the Expand node's output type
   groupingSet_ = std::make_unique<GroupingSet>(
-      aggregationNode_->outputType(),
+      expandNode_->outputType(),
       std::move(hashers),
       /*preGroupedKeys=*/std::vector<column_index_t>{},
       /*groupingKeyOutputProjections=*/
@@ -100,12 +100,10 @@ void MultiGroupingSetHashAggregation::initialize() {
       std::move(aggregates),
       /*ignoreNullKeys=*/aggregationNode_->ignoreNullKeys(),
       isPartialOutput_,
-      /*isRawInput=*/aggregationNode_->step() ==
-              core::AggregationNode::Step::kPartial ||
-          aggregationNode_->step() == core::AggregationNode::Step::kSingle,
+      /*isRawInput=*/isRawInput(aggregationNode_->step()),
       aggregationNode_->globalGroupingSets(),
-      aggregationNode_->groupId(),
-      operatorCtx_->driverCtx()->queryConfig().spillConfig(),
+      /*groupIdChannel=*/std::nullopt,
+      /*spillConfig=*/nullptr,
       &nonReclaimableSection_,
       &operatorCtx_->driverCtx()->queryConfig(),
       operatorCtx_->pool(),
@@ -120,50 +118,48 @@ RowVectorPtr MultiGroupingSetHashAggregation::projectGroupingSet(
     const RowVectorPtr& input,
     int32_t gsIdx) {
   const auto numRows = input->size();
-  const auto& keyChannels = gsKeyChannels_[gsIdx];
-  const int32_t numKeys = static_cast<int32_t>(keyChannels.size());
 
-  // Reconstruct the output schema that the aggregation node expects:
-  //   [key0, key1, ..., keyN-1, grouping_id, agg_input_cols...]
-  // The aggregationNode_->outputType() schema is produced AFTER grouping,
-  // but here we need to produce the *input* schema for the GroupingSet,
-  // which is exactly what the ExpandNode would have produced.
-  //
-  // The ExpandNode output columns are:
-  //   original_input_cols... | key_alias_0 | ... | key_alias_N-1 | gid
-  // We replicate that layout here without materializing extra rows.
-
+  // The ExpandNode output columns are the projected expressions.
+  // Each projection row contains expressions that either:
+  // 1. Reference an input field (FieldAccessTypedExpr)
+  // 2. Are constant values (ConstantTypedExpr) - typically null or grouping_id
   const auto& projRow = expandNode_->projections()[gsIdx];
   const int32_t numExpandCols = static_cast<int32_t>(projRow.size());
 
-  // Build output: original input columns first, then key columns (some null).
+  // Build output columns by evaluating each projection expression.
   std::vector<VectorPtr> outCols;
   outCols.reserve(numExpandCols);
 
-  // Pass-through original input columns unchanged.
-  const auto numInputCols = static_cast<int32_t>(input->childrenSize());
-  for (int32_t c = 0; c < numInputCols; ++c) {
-    outCols.push_back(input->childAt(c));
-  }
+  auto rowType = std::dynamic_pointer_cast<const RowType>(input->type());
+  VELOX_CHECK_NOT_NULL(rowType, "Input must be a RowVector");
 
-  // Key alias columns (possibly null) + grouping_id.
-  for (int32_t col = 0; col < numExpandCols - numInputCols; ++col) {
-    const auto& expr = projRow[numInputCols + col];
+  for (int32_t col = 0; col < numExpandCols; ++col) {
+    const auto& expr = projRow[col];
     if (auto* field =
             dynamic_cast<const core::FieldAccessTypedExpr*>(expr.get())) {
-      // Pass-through the real key column.
-      auto idx = input->type()->as<RowType>().getChildIdx(field->name());
+      // Pass-through the real input column.
+      auto idx = rowType->getChildIdx(field->name());
       outCols.push_back(input->childAt(idx));
     } else if (
         auto* constant =
             dynamic_cast<const core::ConstantTypedExpr*>(expr.get())) {
-      // Constant (null or grouping_id literal) — wrap as constant vector.
-      outCols.push_back(BaseVector::wrapInConstant(
-          numRows, 0, constant->toConstantVector(pool())));
+      // Constant (null or grouping_id literal) — create constant vector.
+      auto constantVec = constant->toConstantVector(pool());
+      VELOX_CHECK_NOT_NULL(constantVec, "Constant vector must not be null");
+      outCols.push_back(BaseVector::wrapInConstant(numRows, 0, constantVec));
     } else {
-      VELOX_FAIL("Unexpected expression type in grouping set projection");
+      VELOX_FAIL(
+          "Unexpected expression type in grouping set projection: {}",
+          expr->toString());
     }
   }
+
+  VELOX_CHECK_EQ(
+      outCols.size(),
+      expandNode_->outputType()->size(),
+      "Number of output columns ({}) must match output type size ({})",
+      outCols.size(),
+      expandNode_->outputType()->size());
 
   return std::make_shared<RowVector>(
       pool(), expandNode_->outputType(), nullptr, numRows, std::move(outCols));
@@ -196,22 +192,36 @@ RowVectorPtr MultiGroupingSetHashAggregation::getOutput() {
     return nullptr;
   }
 
-  const int32_t batchSize =
-      outputBatchRows(groupingSet_->estimateOutputRowSize());
-  prepareOutput(batchSize);
+  const auto estimatedRowSize = groupingSet_->estimateOutputRowSize();
+  const int32_t batchSize = outputBatchRows(estimatedRowSize);
+  const int32_t maxOutputBytes =
+      estimatedRowSize.has_value() ? batchSize * estimatedRowSize.value() : std::numeric_limits<int32_t>::max();
+  
+  // Prepare output vector
+  if (output_) {
+    VectorPtr output = std::move(output_);
+    BaseVector::prepareForReuse(output, batchSize);
+    output_ = std::static_pointer_cast<RowVector>(output);
+  } else {
+    output_ = std::static_pointer_cast<RowVector>(
+        BaseVector::create(outputType_, batchSize, pool()));
+  }
 
   bool hasData = groupingSet_->getOutput(
       batchSize,
-      outputBatchBytes(groupingSet_->estimateOutputRowSize()),
+      maxOutputBytes,
       resultIterator_,
       output_);
 
   if (!hasData) {
-    if (isPartialOutput_) {
+    resultIterator_.reset();
+    if (noMoreInput_) {
+      finished_ = true;
+    } else if (isPartialOutput_) {
+      // Partial table is full and has been flushed; reset it to accept more
+      // input.
       partialFull_ = false;
       groupingSet_->resetTable(/*freeTable=*/false);
-    } else {
-      finished_ = true;
     }
     return nullptr;
   }
