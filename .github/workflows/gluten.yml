@@ -15,7 +15,7 @@
 name: Gluten Build
 
 on:
-  pull_request:
+  push:
     paths:
       - .github/workflows/gluten.yml
   schedule:
@@ -49,8 +49,12 @@ jobs:
           cd gluten && sed -i 's/ibm/ibm-xxx/gI' ep/build-velox/src/get-velox.sh && cd ..
           git clone --depth 1 https://github.com/facebookincubator/velox velox_meta
           cd velox_meta;
-          wget https://github.com/IBM/velox/pull/1661.patch && git apply 1661.patch;
-          wget https://github.com/IBM/velox/pull/29.patch && git apply 29.patch
+          git config --global user.email "you@example.com"
+          git config --global user.name "Your Name"
+          git remote add ibm https://github.com/ibm/velox
+          git fetch ibm
+          git cherry-pick 78a4afaf72b929221833f019633366d209cc2090 # prebuild hashtable
+          git cherry-pick c807bf97497fb447a1c0e3d555a34a3e72f7d953 # schema evolution support
 
       - name: Build Gluten native libraries
         run: |
