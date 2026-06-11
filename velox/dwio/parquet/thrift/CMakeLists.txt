@@ -23,7 +23,7 @@ velox_add_test_headers(
   ParquetThrift.h
 )
 if(VELOX_MONO_LIBRARY)
-  target_link_libraries(velox velox_dwio_parquet_thrift_raw)
+  velox_link_libraries(velox velox_dwio_parquet_thrift_raw)
 endif()
 
 velox_install_library_headers()
