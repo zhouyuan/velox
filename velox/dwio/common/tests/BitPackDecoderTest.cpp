@@ -179,6 +179,57 @@ TEST_F(BitPackDecoderTest, allWidths) {
   }
 }
 
+// testUnpack() derives its bit offset from the first row, so it only reaches
+// the offsets that a given width happens to produce. Sweep the offset
+// independently: the SIMD kernels build their shuffle and shift tables from
+// it, so a wrong offset silently yields wrong values rather than crashing.
+TEST_F(BitPackDecoderTest, allBitOffsets) {
+  constexpr int32_t kNumValues = 1024;
+  std::vector<int32_t> denseRows(kNumValues);
+  std::iota(denseRows.begin(), denseRows.end(), 0);
+  std::vector<int32_t> sparseRows;
+  for (int32_t i = 0; i < kNumValues; i += 3) {
+    sparseRows.push_back(i);
+  }
+
+  for (uint8_t width = 1; width <= 32; ++width) {
+    for (int32_t bitOffset = 0; bitOffset < 8; ++bitOffset) {
+      // Pack 'kNumValues' values starting 'bitOffset' bits in, with slack for
+      // the wide loads the SIMD kernels use.
+      std::vector<uint64_t> packed(
+          bits::divRoundUp(bitOffset + kNumValues * width, 64) + 8, 0);
+      for (int32_t i = 0; i < kNumValues; ++i) {
+        bits::copyBits(
+            &randomInts_[i], 0, packed.data(), bitOffset + i * width, width);
+      }
+
+      for (bool sparse : {false, true}) {
+        // gather8Sparse() requires byte-aligned fields when the width is a
+        // multiple of 8; the Parquet reader never produces that combination.
+        if (sparse && width % 8 == 0 && bitOffset != 0) {
+          continue;
+        }
+        const auto& rows = sparse ? sparseRows : denseRows;
+        std::vector<int32_t> result(rows.size());
+        unpack<int32_t>(
+            packed.data(),
+            bitOffset,
+            RowSet(rows.data(), rows.size()),
+            0,
+            width,
+            reinterpret_cast<const char*>(packed.data() + packed.size()),
+            result.data());
+        const uint64_t mask = bits::lowMask(width);
+        for (size_t i = 0; i < rows.size(); ++i) {
+          ASSERT_EQ(randomInts_[rows[i]] & mask, result[i])
+              << "width " << int(width) << " bitOffset " << bitOffset << " row "
+              << rows[i];
+        }
+      }
+    }
+  }
+}
+
 TEST_P(BitPackDecoderBmi2Test, uint8AllRows) {
   for (auto width = 1; width <= 8; ++width) {
     testUnpack<uint8_t>(width);

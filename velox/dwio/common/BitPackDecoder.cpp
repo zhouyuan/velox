@@ -83,6 +83,11 @@ FOLLY_ALWAYS_INLINE __m256i gather8Sparse(
   constexpr __m256si kWidthSplat = {
       width, width, width, width, width, width, width, width};
 
+  // When 'width' is a multiple of 8 the intra-byte shift below is skipped, so
+  // every field must be byte aligned. That holds for the only caller: a
+  // Parquet bit-packed run starts byte aligned and a group of 8 fields spans
+  // whole bytes, so 'bitOffset' stays 0 for these widths.
+  VELOX_DCHECK(width % 8 != 0 || bitOffset == 0);
   auto indices =
       *reinterpret_cast<const __m256si_u*>(rows + i) * kWidthSplat + bitOffset;
   __m256si multipliers;
@@ -97,6 +102,70 @@ FOLLY_ALWAYS_INLINE __m256i gather8Sparse(
     data = (data * multipliers) >> 8;
   }
   return as256i(data & masks);
+}
+
+// Byte-shuffle indices and per-lane shifts that place 8 consecutive
+// bit-packed fields into 8 32-bit lanes. A group of 8 fields spans exactly
+// 'width' whole bytes, so these tables depend only on the bit offset of the
+// group's first field within its first byte.
+struct ContiguousTables {
+  // Byte selectors for _mm256_shuffle_epi8, four per lane.
+  __m256i shuffle;
+  // Right shift that moves each field to the bottom of its lane.
+  __m256i shift;
+  // Offset of the 128-bit load feeding lanes 4 through 7, relative to the
+  // first byte of the group.
+  int32_t highHalfByte;
+};
+
+template <uint8_t width>
+ContiguousTables makeContiguousTables(int32_t startShift) {
+  alignas(32) int8_t shuffle[32];
+  alignas(32) int32_t shifts[8];
+  const int32_t highHalfByte = (startShift + 4 * width) >> 3;
+  for (int32_t lane = 0; lane < 4; ++lane) {
+    const int32_t lowBit = startShift + lane * width;
+    const int32_t highBit = startShift + (lane + 4) * width;
+    shifts[lane] = lowBit & 7;
+    shifts[lane + 4] = highBit & 7;
+    // _mm256_shuffle_epi8 selects within each 128-bit half, so the high
+    // lanes index relative to their own load.
+    for (int32_t byte = 0; byte < 4; ++byte) {
+      shuffle[lane * 4 + byte] = static_cast<int8_t>((lowBit >> 3) + byte);
+      shuffle[16 + lane * 4 + byte] =
+          static_cast<int8_t>(((highBit >> 3) - highHalfByte) + byte);
+    }
+  }
+  return {
+      _mm256_load_si256(reinterpret_cast<const __m256i*>(shuffle)),
+      _mm256_load_si256(reinterpret_cast<const __m256i*>(shifts)),
+      highHalfByte,
+  };
+}
+
+// Decodes 8 consecutive fields using neither pdep nor gather: each 32-bit
+// lane collects the bytes holding its field with a byte shuffle, then a
+// per-lane variable shift and mask.
+//
+// Requires 17 <= width <= 25. The lower bound keeps the two 128-bit loads
+// within the 8-byte redzone that unpack() already reserves past the last
+// field; narrower widths would read further past the buffer. The upper bound
+// keeps a field plus its up-to-7-bit start offset inside 32 bits.
+template <uint8_t width>
+FOLLY_ALWAYS_INLINE __m256i decode8Contiguous(
+    const uint64_t* bits,
+    int64_t startBit,
+    const ContiguousTables& tables) {
+  static_assert(width >= 17 && width <= 25);
+  const char* base = reinterpret_cast<const char*>(bits) + (startBit >> 3);
+  const __m256i source = _mm256_set_m128i(
+      _mm_loadu_si128(
+          reinterpret_cast<const __m128i*>(base + tables.highHalfByte)),
+      _mm_loadu_si128(reinterpret_cast<const __m128i*>(base)));
+  return _mm256_and_si256(
+      _mm256_srlv_epi32(
+          _mm256_shuffle_epi8(source, tables.shuffle), tables.shift),
+      _mm256_set1_epi32(bits::lowMask(width)));
 }
 
 template <uint8_t width, typename T>
@@ -114,11 +183,33 @@ int32_t decode1To24(
   constexpr uint64_t kDepMask16 = kMask16 | (kMask16 << 32);
   int32_t i = 0;
   const auto masks = as8x32(_mm256_set1_epi32(kMask));
+  // Tables for the pdep-free contiguous kernel. Consecutive groups in one
+  // contiguous run share a start bit offset, because 8 fields span 'width'
+  // whole bytes, so this is rebuilt at most once per run.
+  [[maybe_unused]] int32_t tableShift = -1;
+  [[maybe_unused]] ContiguousTables tables{};
   for (; i + 8 <= numRows; i += 8) {
     auto row = rows[i];
     auto endRow = rows[i + 7];
     __m256i eightInts;
-    if (width <= 16 && endRow - row == 7) {
+    if constexpr (width >= 17) {
+      if (endRow - row == 7) {
+        // Widths 17 and up have no pdep kernel, so they would otherwise
+        // gather. When the fields are adjacent a byte shuffle reaches all of
+        // them from two loads, at a fraction of a gather's throughput cost.
+        const int64_t startBit =
+            static_cast<int64_t>(bitOffset) + static_cast<int64_t>(row) * width;
+        const int32_t startShift = static_cast<int32_t>(startBit & 7);
+        if (startShift != tableShift) {
+          tableShift = startShift;
+          tables = makeContiguousTables<width>(startShift);
+        }
+        eightInts = decode8Contiguous<width>(bits, startBit, tables);
+      } else {
+        eightInts =
+            gather8Sparse<width>(bits, bitOffset, rows, i, masks, result);
+      }
+    } else if (endRow - row == 7) {
       // Special cases for 8 contiguous values with <= 16 bits.
       if (width <= 8) {
         uint64_t eightBytes;
