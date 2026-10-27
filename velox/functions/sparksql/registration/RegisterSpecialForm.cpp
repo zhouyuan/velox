@@ -17,6 +17,7 @@
 #include "velox/expression/ExprConstants.h"
 #include "velox/expression/RowConstructor.h"
 #include "velox/expression/SpecialFormRegistry.h"
+#include "velox/functions/sparksql/VariantGet.h"
 #include "velox/functions/sparksql/specialforms/AtLeastNNonNulls.h"
 #include "velox/functions/sparksql/specialforms/DecimalRound.h"
 #include "velox/functions/sparksql/specialforms/FromJson.h"
@@ -49,6 +50,12 @@ void registerSpecialFormGeneralFunctions(const std::string& prefix) {
   exec::registerFunctionCallToSpecialForm(
       FromJsonCallToSpecialForm::kFromJson,
       std::make_unique<FromJsonCallToSpecialForm>());
+  exec::registerFunctionCallToSpecialForm(
+      VariantGetCallToSpecialForm::kVariantGet,
+      std::make_unique<VariantGetCallToSpecialForm>(/*failOnError=*/true));
+  exec::registerFunctionCallToSpecialForm(
+      VariantGetCallToSpecialForm::kTryVariantGet,
+      std::make_unique<VariantGetCallToSpecialForm>(/*failOnError=*/false));
   registerFunctionCallToSpecialForm(
       "get_struct_field", std::make_unique<GetStructFieldCallToSpecialForm>());
   registerFunctionCallToSpecialForm(

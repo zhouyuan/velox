@@ -22,7 +22,9 @@
 #include "velox/functions/lib/DateTimeFormatter.h"
 #include "velox/functions/lib/TimeUtils.h"
 #include "velox/functions/sparksql/SparkQueryConfig.h"
+#include "velox/functions/sparksql/VariantJson.h"
 #include "velox/type/DecimalUtil.h"
+#include "velox/type/variant/VariantType.h"
 
 namespace facebook::velox::functions::sparksql {
 namespace detail {
@@ -266,6 +268,19 @@ inline void toJson<TypeKind::ROW>(
     bool isMapKey) {
   auto rowType = std::static_pointer_cast<const RowType>(input.type());
   auto row = input.castTo<DynamicRow>();
+  if (isVariantType(rowType)) {
+    const auto metadata = row.at(VariantType::kMetadataIndex);
+    const auto value = row.at(VariantType::kValueIndex);
+    VELOX_USER_CHECK(
+        metadata.has_value() && value.has_value(),
+        "Variant binary is malformed.");
+    const auto metadataBytes = metadata->castTo<Varbinary>();
+    const auto valueBytes = value->castTo<Varbinary>();
+    VariantMetadata variantMetadata(metadataBytes);
+    VariantJson::toJson(
+        VariantValue(variantMetadata, valueBytes), options.timeZone, result);
+    return;
+  }
   result.append(isMapKey ? "[" : "{");
   bool commaBefore = false;
   for (int i = 0; i < rowType->size(); i++) {

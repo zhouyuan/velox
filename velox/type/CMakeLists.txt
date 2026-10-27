@@ -17,6 +17,7 @@ endif()
 
 add_subdirectory(tz)
 add_subdirectory(fbhive)
+add_subdirectory(variant)
 
 velox_add_library(
   velox_type

@@ -162,6 +162,16 @@ class SparkQueryConfig {
       true,
       "If true, Spark collect_list() ignores nulls in the input.")
 
+  /// If true, parse_json keeps the last value of duplicate object keys.
+  /// Otherwise, it fails on duplicate keys.
+  VELOX_SPARK_CONFIG(
+      kVariantAllowDuplicateKeys,
+      variantAllowDuplicateKeys,
+      "variant.allow_duplicate_keys",
+      bool,
+      false,
+      "Keep the last value of duplicate keys when parsing JSON into a Spark Variant.")
+
   VELOX_SPARK_CONFIG(
       kDecimalToFloatHighPrecisionCastEnabled,
       decimalToFloatHighPrecisionCastEnabled,

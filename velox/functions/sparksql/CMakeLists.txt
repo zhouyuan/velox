@@ -52,6 +52,10 @@ velox_add_library(
   TimestampUtils.cpp
   Transform.cpp
   UnscaledValueFunction.cpp
+  VariantFunctions.cpp
+  VariantGet.cpp
+  VariantJson.cpp
+  VariantVectors.cpp
   XxHash64.cpp
   HEADERS
   AnsiMode.h
@@ -109,6 +113,10 @@ velox_add_library(
   ToJson.h
   ToPrettyString.h
   UnBase64Function.h
+  VariantFunctions.h
+  VariantGet.h
+  VariantJson.h
+  VariantVectors.h
   UnscaledValueFunction.h
   Uuid.h
   VarcharTypeWriteSideCheck.h
@@ -121,6 +129,7 @@ velox_link_libraries(
   velox_functions_prestosql_impl
   velox_functions_spark_specialforms
   velox_functions_util
+  velox_type_variant
   Folly::folly
   simdjson::simdjson
 )

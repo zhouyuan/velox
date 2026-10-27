@@ -262,6 +262,15 @@ struct DateType {} // allowed for INT32
 struct NullType {} // allowed for any physical type, only null values stored
 
 /**
+ * Variant logical type annotation. Allowed for groups with a binary
+ * 'metadata' field, an optional binary 'value' field and an optional
+ * 'typed_value' field for shredded values.
+ */
+struct VariantType {
+  1: optional byte specification_version
+}
+
+/**
  * Decimal logical type annotation
  *
  * To maintain forward-compatibility in v1, implementations using this logical
@@ -359,6 +368,8 @@ union LogicalType {
   12: JsonType JSON; // use ConvertedType JSON
   13: BsonType BSON; // use ConvertedType BSON
   14: UUIDType UUID;
+  // 15: reserved for FLOAT16
+  16: VariantType VARIANT;
 }
 
 /**
