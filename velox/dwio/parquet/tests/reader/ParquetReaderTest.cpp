@@ -29,6 +29,8 @@
 #include "velox/dwio/parquet/tests/ParquetTestBase.h"
 #include "velox/dwio/parquet/thrift/ParquetThrift.h"
 #include "velox/expression/ExprToSubfieldFilter.h"
+#include "velox/type/variant/VariantEncoding.h"
+#include "velox/type/variant/VariantType.h"
 #include "velox/vector/tests/utils/VectorMaker.h"
 
 using namespace facebook::velox;
@@ -362,6 +364,74 @@ TEST_F(ParquetReaderTest, nestedNameColumnMapping) {
                {std::nullopt, std::nullopt, std::nullopt})})});
   assertReadWithReaderAndExpected(
       outputType, *readerBundle.rowReader, expected, *leafPool_);
+}
+
+// variant_unshredded.parquet was written by Spark 4.0.2 from
+// parse_json('{"a":1,"b":"x"}'), parse_json('[1,2.5,null]'), NULL and
+// parse_json('"s"'). Spark writes the 'value' field before 'metadata'.
+TEST_F(ParquetReaderTest, variant) {
+  const auto outputType = ROW({"id", "v"}, {BIGINT(), VARIANT()});
+  for (auto mode : {ColumnMappingMode::kPosition, ColumnMappingMode::kName}) {
+    SCOPED_TRACE(static_cast<int>(mode));
+    auto readerOptions = makeDefaultReaderOptions();
+    readerOptions.setFileSchema(outputType);
+    readerOptions.setColumnMappingMode(mode);
+    auto readerBundle = readerBuilder("variant_unshredded.parquet", outputType)
+                            .options(readerOptions)
+                            .build();
+    EXPECT_TRUE(isVariantType(readerBundle.reader->rowType()->childAt(1)));
+
+    VectorPtr result = BaseVector::create(outputType, 0, pool());
+    ASSERT_TRUE(readerBundle.rowReader->next(10, result));
+    ASSERT_EQ(result->size(), 4);
+    auto* row = result->as<RowVector>();
+    const auto& variants = row->childAt(1);
+    ASSERT_TRUE(isVariantType(variants->type()));
+    EXPECT_TRUE(variants->isNullAt(2));
+
+    DecodedVector decodedVariants(*variants);
+    const auto* variantRow = decodedVariants.base()->as<RowVector>();
+    auto bytesAt = [&](column_index_t child, vector_size_t index) {
+      DecodedVector bytes(*variantRow->childAt(child));
+      return bytes.valueAt<StringView>(decodedVariants.index(index)).str();
+    };
+
+    const auto metadata0 = bytesAt(VariantType::kMetadataIndex, 0);
+    const auto value0 = bytesAt(VariantType::kValueIndex, 0);
+    VariantMetadata object0Metadata(metadata0);
+    VariantValue object0(object0Metadata, value0);
+    EXPECT_EQ(object0.field("a")->asInteger(), 1);
+    EXPECT_EQ(object0.field("b")->asString(), "x");
+
+    const auto metadata1 = bytesAt(VariantType::kMetadataIndex, 1);
+    const auto value1 = bytesAt(VariantType::kValueIndex, 1);
+    VariantMetadata array1Metadata(metadata1);
+    VariantValue array1(array1Metadata, value1);
+    ASSERT_EQ(array1.numElements(), 3);
+    EXPECT_EQ(array1.elementAt(0).asInteger(), 1);
+    EXPECT_EQ(array1.elementAt(1).asDecimal().unscaledValue, 25);
+    EXPECT_EQ(array1.elementAt(1).asDecimal().scale, 1);
+    EXPECT_TRUE(array1.elementAt(2).isNull());
+
+    const auto metadata3 = bytesAt(VariantType::kMetadataIndex, 3);
+    const auto value3 = bytesAt(VariantType::kValueIndex, 3);
+    VariantMetadata string3Metadata(metadata3);
+    EXPECT_EQ(VariantValue(string3Metadata, value3).asString(), "s");
+  }
+}
+
+// variant_shredded.parquet was written by Spark 4.0.2 with fields 'a' and 'b'
+// shredded into typed_value.
+TEST_F(ParquetReaderTest, variantShredded) {
+  const auto outputType = ROW({"id", "v"}, {BIGINT(), VARIANT()});
+  auto readerOptions = makeDefaultReaderOptions();
+  readerOptions.setFileSchema(outputType);
+  readerOptions.setColumnMappingMode(ColumnMappingMode::kName);
+  VELOX_ASSERT_THROW(
+      readerBuilder("variant_shredded.parquet", outputType)
+          .options(readerOptions)
+          .build(),
+      "Reading shredded Parquet VARIANT columns is not supported yet: v");
 }
 
 TEST_F(ParquetReaderTest, parseEmptyNestedList) {

@@ -86,6 +86,7 @@ add_executable(
   StringTest.cpp
   StringToMapTest.cpp
   ToJsonTest.cpp
+  VariantFunctionsTest.cpp
   ToPrettyStringTest.cpp
   TransformKeysTest.cpp
   TransformTest.cpp

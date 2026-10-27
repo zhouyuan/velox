@@ -31,6 +31,7 @@
 #include "velox/dwio/parquet/reader/StructColumnReader.h"
 #include "velox/dwio/parquet/thrift/ParquetThrift.h"
 #include "velox/functions/lib/string/StringImpl.h"
+#include "velox/type/variant/VariantType.h"
 
 namespace facebook::velox::parquet {
 
@@ -615,6 +616,93 @@ std::unique_ptr<ParquetTypeWithId> ReaderBase::getParquetColumnInfo(
         requestedType->isMap());
 
     std::vector<std::unique_ptr<ParquetTypeWithId::TypeWithId>> children;
+
+    // Spark 4.0 writes Variant groups without the VARIANT annotation, so a
+    // VARIANT requested type also identifies them.
+    const bool isVariant = isVariantType(requestedType) ||
+        (schemaElement.logicalType().has_value() &&
+         schemaElement.logicalType()->getType() ==
+             thrift::LogicalType::Type::VARIANT);
+    if (isVariant) {
+      VELOX_USER_CHECK(
+          !isRepeated, "Parquet VARIANT group cannot be repeated: {}", name);
+      if (mappingMode == dwio::common::ColumnMappingMode::kParquetFieldId) {
+        VELOX_NYI(
+            "Reading Parquet VARIANT columns by field id is not supported yet: {}",
+            name);
+      }
+      // The fields of a Variant group are matched by name. Writers do not
+      // agree on their order: Spark writes 'value' before 'metadata'.
+      std::unique_ptr<ParquetTypeWithId::TypeWithId> metadata;
+      std::unique_ptr<ParquetTypeWithId::TypeWithId> value;
+      const auto groupSchemaIdx = schemaIdx;
+      for (int32_t i = 0; i < *schemaElement.num_children(); ++i) {
+        ++schemaIdx;
+        const auto& childElement = schema[schemaIdx];
+        const auto& childName = *childElement.name();
+        if (childName == "typed_value") {
+          VELOX_NYI(
+              "Reading shredded Parquet VARIANT columns is not supported yet: {}",
+              name);
+        }
+        VELOX_USER_CHECK(
+            childName == "metadata" || childName == "value",
+            "Unexpected field in Parquet VARIANT group {}: {}",
+            name,
+            childName);
+        VELOX_USER_CHECK(
+            childElement.type().has_value() &&
+                *childElement.type() == thrift::Type::BYTE_ARRAY,
+            "Field of Parquet VARIANT group {} must be binary: {}",
+            name,
+            childName);
+        auto& target = childName == "metadata" ? metadata : value;
+        VELOX_USER_CHECK_NULL(
+            target,
+            "Duplicate field in Parquet VARIANT group {}: {}",
+            name,
+            childName);
+        // Under position mapping the parent records the names of children
+        // that are not reserved keywords. See parentProvidesChildNames.
+        if (mappingMode == dwio::common::ColumnMappingMode::kPosition &&
+            options_.fileSchema() &&
+            !isParquetReservedKeyword(childName, groupSchemaIdx, schemaIdx)) {
+          columnNames.push_back(childName);
+        }
+        target = getParquetColumnInfo(
+            maxSchemaElementIdx,
+            maxRepeat,
+            maxDefine,
+            groupSchemaIdx,
+            schemaIdx,
+            columnIdx,
+            VARBINARY(),
+            VARIANT(),
+            nullptr,
+            columnNames);
+      }
+      VELOX_USER_CHECK(
+          metadata != nullptr && value != nullptr,
+          "Parquet VARIANT group must have metadata and value fields: {}",
+          name);
+      children.push_back(std::move(metadata));
+      children.push_back(std::move(value));
+      name = columnNames.at(curSchemaIdx);
+      return std::make_unique<ParquetTypeWithId>(
+          VARIANT(),
+          std::move(children),
+          curSchemaIdx,
+          maxSchemaElementIdx,
+          ParquetTypeWithId::kNonLeaf,
+          std::move(name),
+          std::nullopt,
+          std::nullopt,
+          std::nullopt,
+          maxRepeat,
+          maxDefine,
+          isOptional,
+          isRepeated);
+    }
 
     RowTypePtr requestedRowType = nullptr;
     if (requestedType) {
