@@ -49,13 +49,15 @@ FOLLY_ALWAYS_INLINE std::string format_as(ReferenceQueryErrorCode errorCode) {
   }
 }
 
-/// Query runner that uses reference database, i.e. DuckDB, Presto, Spark.
+/// Query runner that uses reference database, i.e. DuckDB, Presto, Spark,
+/// Flink.
 class ReferenceQueryRunner {
  public:
   enum class RunnerType {
     kPrestoQueryRunner,
     kDuckQueryRunner,
-    kSparkQueryRunner
+    kSparkQueryRunner,
+    kFlinkQueryRunner
   };
 
   // @param aggregatePool Used to allocate memory needed for vectors produced

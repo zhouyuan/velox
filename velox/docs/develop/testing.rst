@@ -13,3 +13,4 @@ Testing Tools
     testing/row-number-fuzzer
     testing/writer-fuzzer
     testing/spark-query-runner.rst
+    testing/flink-query-runner.rst

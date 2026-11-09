@@ -58,4 +58,7 @@ velox_link_libraries(
 
 if(${VELOX_BUILD_TESTING})
   add_subdirectory(tests)
+  if(${VELOX_ENABLE_FLINK_FUNCTIONS})
+    add_subdirectory(fuzzer)
+  endif()
 endif()
