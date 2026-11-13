@@ -84,6 +84,18 @@ requires the SQL Gateway (set ``FLINK_GATEWAY_URL`` if it is not at
 `http://localhost:8083`) and is therefore disabled in CTest. The SQL
 translation is tested by ``velox_flink_sql_test``, which runs without Flink.
 
+Nightly Run
+-----------
+
+``.github/workflows/flink-fuzzer.yml`` builds the fuzzer, starts Flink with
+``scripts/flink/start-flink.sh`` and runs the fuzzer against it for an hour
+every night. It can also be started manually with a ref, duration and seed.
+Failures are reported as GitHub issues labeled ``flink-fuzzer`` by
+``scripts/flink/fuzzer-report.sh``: the issue title holds the failure reason,
+and a failure whose reason matches an open issue is added to it as a comment.
+The issue links to the run artifacts, which contain the repro files and the
+tail of the fuzzer log, and gives the seed to reproduce the failing iteration.
+
 Limitations
 -----------
 

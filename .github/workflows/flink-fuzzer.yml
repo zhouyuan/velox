@@ -1,0 +1,299 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Nightly Flink expression fuzzer: builds flink_expression_fuzzer_test, starts a
+# local Flink 1.19 cluster with the SQL Gateway, and fuzzes the Flink SQL
+# functions for an hour with Flink as the reference DB. Failures are reported
+# as GitHub issues labeled 'flink-fuzzer'; a failure whose reason matches an
+# open issue is added to it as a comment.
+#
+# GitHub runs scheduled workflows from the default branch only, so this file
+# must be on the default branch (main) for the nightly run. The code under test
+# is checked out from FUZZ_REF: main, or the 'ref' input of a manual run.
+
+name: Flink Fuzzer
+
+on:
+  schedule:
+    # 02:00 UTC every night.
+    - cron: "0 2 * * *"
+
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag or SHA to fuzz"
+        default: "main"
+        required: true
+      duration_sec:
+        description: "Fuzzer duration in seconds"
+        default: "3600"
+        required: true
+      seed:
+        description: "Fuzzer seed (empty for a random seed)"
+        default: ""
+        required: false
+      num_threads:
+        description: "Number of threads to use for the build"
+        default: "4"
+        required: false
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.repository }}
+  cancel-in-progress: false
+
+env:
+  FUZZ_REF: ${{ inputs.ref || 'main' }}
+  DURATION_SEC: ${{ inputs.duration_sec || '3600' }}
+  FLINK_VERSION: "1.19.2"
+  FLINK_GATEWAY_URL: "http://localhost:8083"
+  NUM_THREADS: ${{ inputs.num_threads || '4' }}
+
+jobs:
+  flink-fuzzer:
+    name: Flink Expression Fuzzer
+    # Only run on the fork that hosts the Flink functions.
+    if: ${{ github.repository == 'zhouyuan/velox' }}
+    runs-on: ubuntu-latest
+    container: ghcr.io/lgbo-ustc/velox4j:sse-v1
+    timeout-minutes: 340
+    defaults:
+      run:
+        shell: bash
+    env:
+      CCACHE_DIR: "${{ github.workspace }}/ccache"
+      BUILD_DIR: "${{ github.workspace }}/_build/flink-fuzzer"
+      REPRO_DIR: "/tmp/flink_fuzzer_repro"
+      VELOX_DEPENDENCY_SOURCE: SYSTEM
+      CPU_TARGET: sse
+      GTest_SOURCE: BUNDLED
+      simdjson_SOURCE: BUNDLED
+      xsimd_SOURCE: BUNDLED
+      folly_SOURCE: BUNDLED
+      geos_SOURCE: BUNDLED
+      absl_SOURCE: BUNDLED
+      gRPC_SOURCE: BUNDLED
+      PulsarClient_SOURCE: BUNDLED
+      USE_CLANG: "false"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FUZZ_REF }}
+          persist-credentials: false
+
+      - name: Fix git permissions
+        # Usually actions/checkout does this but as we run in a container
+        # it doesn't work.
+        run: git config --global --add safe.directory ${GITHUB_WORKSPACE}
+
+      - name: Record revision
+        id: revision
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure ccache directory exists
+        run: mkdir -p "${CCACHE_DIR}"
+
+      - name: Restore ccache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-flink-fuzzer-v1-${{ runner.os }}-${{ env.CPU_TARGET }}-${{ steps.revision.outputs.sha }}
+          restore-keys: |
+            ccache-flink-fuzzer-v1-${{ runner.os }}-${{ env.CPU_TARGET }}-
+            ccache-linux-gluten-v2-${{ runner.os }}-${{ env.CPU_TARGET }}-
+
+      - name: Zero Ccache Statistics
+        run: ccache -sz
+
+      - name: Configure Build
+        id: configure
+        run: |
+          EXTRA_CMAKE_FLAGS=(
+            "-DCMAKE_BUILD_TYPE=Release"
+            "-DCMAKE_PREFIX_PATH=/usr/local"
+            "-DBoost_DIR=/usr/local/lib/cmake/Boost-1.84.0"
+            "-DVELOX_MONO_LIBRARY=ON"
+            "-DVELOX_BUILD_SHARED=ON"
+            "-DVELOX_BUILD_STATIC=OFF"
+            "-DVELOX_BUILD_TESTING=ON"
+            "-DVELOX_ENABLE_ARROW=ON"
+            "-DVELOX_ENABLE_KAFKA_CONNECTOR=ON"
+            "-DVELOX_ENABLE_PULSAR_CONNECTOR=ON"
+            "-DVELOX_ENABLE_CCACHE=ON"
+            "-DVELOX_CPR_USE_SYSTEM_CURL=ON"
+            "-Dc-ares_SOURCE=BUNDLED"
+          )
+          cmake -S . -B "${BUILD_DIR}" -GNinja "${EXTRA_CMAKE_FLAGS[@]}"
+
+      - name: Build Fuzzer
+        id: build
+        run: |
+          cmake --build "${BUILD_DIR}" -j${{ env.NUM_THREADS }} --target \
+            flink_expression_fuzzer_test \
+            velox_flink_sql_test \
+            velox_flink_query_runner_test
+
+      - name: Ccache after build
+        if: ${{ !cancelled() }}
+        run: ccache -s
+
+      - name: Save ccache
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-flink-fuzzer-v1-${{ runner.os }}-${{ env.CPU_TARGET }}-${{ steps.revision.outputs.sha }}
+
+      - name: Run Flink SQL Translation Tests
+        id: sql_test
+        run: |
+          "${BUILD_DIR}"/velox/experimental/stateful/fuzzer/tests/velox_flink_sql_test
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Restore Flink distribution
+        id: flink_cache
+        uses: actions/cache@v4
+        with:
+          path: /opt/flink-${{ env.FLINK_VERSION }}
+          key: flink-dist-${{ env.FLINK_VERSION }}-scala_2.12
+
+      - name: Download Flink
+        if: ${{ steps.flink_cache.outputs.cache-hit != 'true' }}
+        run: |
+          curl -sSfL --retry 3 \
+            "https://archive.apache.org/dist/flink/flink-${FLINK_VERSION}/flink-${FLINK_VERSION}-bin-scala_2.12.tgz" \
+            | tar -xz -C /opt
+
+      - name: Start Flink
+        id: flink
+        run: |
+          export FLINK_HOME=/opt/flink-${FLINK_VERSION}
+          echo "FLINK_HOME=${FLINK_HOME}" >> "$GITHUB_ENV"
+          bash scripts/flink/start-flink.sh
+
+      - name: Run Flink Query Runner Tests
+        id: runner_test
+        run: |
+          "${BUILD_DIR}"/velox/experimental/stateful/fuzzer/tests/velox_flink_query_runner_test \
+            --gtest_also_run_disabled_tests
+
+      - name: Run Flink Expression Fuzzer
+        id: fuzzer
+        # The fuzzer runs for DURATION_SEC; leave room for slow iterations.
+        timeout-minutes: 90
+        run: |
+          set -o pipefail
+          mkdir -p "${REPRO_DIR}/logs"
+          chmod -R 777 "${REPRO_DIR}"
+          seed="${{ inputs.seed }}"
+          if [[ -z "${seed}" ]]; then
+            seed=$(( (RANDOM << 15) | RANDOM ))
+          fi
+          echo "seed=${seed}" >> "$GITHUB_OUTPUT"
+          echo "Seed: ${seed}"
+          "${BUILD_DIR}"/velox/experimental/stateful/fuzzer/flink_expression_fuzzer_test \
+              --seed "${seed}" \
+              --duration_sec "${DURATION_SEC}" \
+              --flink_gateway_url "${FLINK_GATEWAY_URL}" \
+              --minloglevel=0 \
+              --stderrthreshold=2 \
+              --log_dir="${REPRO_DIR}/logs" \
+              --repro_persist_path="${REPRO_DIR}" \
+              2>&1 | tee "${REPRO_DIR}/fuzzer-output.log"
+          echo -e "\n\nFlink fuzzer run finished successfully."
+
+      - name: Collect logs
+        if: ${{ !cancelled() }}
+        run: |
+          mkdir -p "${REPRO_DIR}"
+          # The INFO log of a one-hour run is large. Keep its tail, which holds
+          # the failing iteration, and drop the rest.
+          for log in "${REPRO_DIR}"/logs/*.INFO.*; do
+            [[ -f "${log}" ]] || continue
+            tail -n 20000 "${log}" > "${log}.tail" && rm -f "${log}"
+          done
+          if [[ -n "${FLINK_HOME:-}" && -d "${FLINK_HOME}/log" ]]; then
+            mkdir -p "${REPRO_DIR}/flink-logs"
+            cp "${FLINK_HOME}"/log/*.log "${REPRO_DIR}/flink-logs/" || true
+          fi
+
+      - name: Upload artifacts
+        id: upload
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: flink-fuzzer-artifacts
+          path: ${{ env.REPRO_DIR }}
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Write failure report
+        id: report
+        if: ${{ failure() }}
+        env:
+          SEED: ${{ steps.fuzzer.outputs.seed }}
+          SHA: ${{ steps.revision.outputs.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+          OUTCOME_CONFIGURE: ${{ steps.configure.outcome }}
+          OUTCOME_BUILD: ${{ steps.build.outcome }}
+          OUTCOME_SQL_TEST: ${{ steps.sql_test.outcome }}
+          OUTCOME_FLINK: ${{ steps.flink.outcome }}
+          OUTCOME_RUNNER_TEST: ${{ steps.runner_test.outcome }}
+          OUTCOME_FUZZER: ${{ steps.fuzzer.outcome }}
+        run: bash scripts/flink/fuzzer-report.sh "${RUNNER_TEMP}/flink-fuzzer-report"
+
+      - name: Report issue
+        if: ${{ failure() && steps.report.outcome == 'success' }}
+        uses: actions/github-script@v7
+        env:
+          REPORT_DIR: ${{ runner.temp }}/flink-fuzzer-report
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const dir = process.env.REPORT_DIR;
+            const title = fs.readFileSync(path.join(dir, 'title.txt'), 'utf8').trim();
+            const body = fs.readFileSync(path.join(dir, 'body.md'), 'utf8');
+            const label = 'flink-fuzzer';
+
+            try {
+              await github.rest.issues.getLabel({...context.repo, name: label});
+            } catch (e) {
+              await github.rest.issues.createLabel({
+                ...context.repo, name: label, color: 'd93f0b',
+                description: 'Failures found by the nightly Flink fuzzer'});
+            }
+
+            // Add to the open issue with the same failure reason, if any.
+            const open = await github.paginate(github.rest.issues.listForRepo, {
+              ...context.repo, state: 'open', labels: label, per_page: 100});
+            const existing = open.find(issue => issue.title === title);
+            if (existing) {
+              await github.rest.issues.createComment({
+                ...context.repo, issue_number: existing.number, body});
+              core.notice(`Commented on issue #${existing.number}: ${title}`);
+            } else {
+              const {data: issue} = await github.rest.issues.create({
+                ...context.repo, title, body, labels: [label]});
+              core.notice(`Opened issue #${issue.number}: ${title}`);
+            }
