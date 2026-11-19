@@ -56,7 +56,8 @@ class ReferenceQueryRunner {
     kPrestoQueryRunner,
     kDuckQueryRunner,
     kSparkQueryRunner,
-    kVeloxQueryRunner
+    kVeloxQueryRunner,
+    kFlinkQueryRunner,
   };
 
   // @param aggregatePool Used to allocate memory needed for vectors produced

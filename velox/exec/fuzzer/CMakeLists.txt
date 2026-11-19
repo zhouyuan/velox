@@ -30,6 +30,8 @@ add_library(
   ReferenceQueryRunner.cpp
   DuckQueryRunner.cpp
   DuckQueryRunnerToSqlPlanNodeVisitor.cpp
+  FlinkQueryRunner.cpp
+  FlinkSql.cpp
   PrestoQueryRunner.cpp
   PrestoQueryRunnerIntermediateTypeTransforms.cpp
   PrestoQueryRunnerTimestampWithTimeZoneTransform.cpp
@@ -44,6 +46,8 @@ velox_add_test_headers(
   velox_fuzzer_util
   DuckQueryRunner.h
   DuckQueryRunnerToSqlPlanNodeVisitor.h
+  FlinkQueryRunner.h
+  FlinkSql.h
   FuzzerUtil.h
   PrestoQueryRunner.h
   PrestoQueryRunnerIntermediateTypeTransforms.h

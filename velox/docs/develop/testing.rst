@@ -14,3 +14,4 @@ Testing Tools
     testing/spatial-join-fuzzer
     testing/writer-fuzzer
     testing/spark-query-runner.rst
+    testing/flink-query-runner.rst

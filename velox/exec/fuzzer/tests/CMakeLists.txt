@@ -32,6 +32,31 @@ add_test(presto_sql_test presto_sql_test)
 
 target_link_libraries(presto_sql_test velox_fuzzer_util velox_presto_types)
 
+add_executable(flink_sql_test FlinkSqlTest.cpp)
+add_test(flink_sql_test flink_sql_test)
+
+target_link_libraries(
+  flink_sql_test
+  velox_fuzzer_util
+  velox_vector_test_lib
+  GTest::gtest
+  GTest::gtest_main
+)
+
+# The DISABLED_ tests require a Flink SQL Gateway, see
+# velox/docs/develop/testing/flink-query-runner.rst.
+add_executable(flink_query_runner_test FlinkQueryRunnerTest.cpp)
+add_test(flink_query_runner_test flink_query_runner_test)
+
+target_link_libraries(
+  flink_query_runner_test
+  velox_fuzzer_util
+  velox_exec_test_lib
+  velox_vector_test_lib
+  GTest::gtest
+  GTest::gtest_main
+)
+
 # LocalRunnerService Test (requires FBThrift support)
 if(VELOX_ENABLE_LOCAL_RUNNER_SERVICE)
   add_executable(local_runner_service_test LocalRunnerServiceTest.cpp)

@@ -15,9 +15,12 @@
  */
 
 #include <folly/init/Init.h>
+#include <gflags/gflags.h>
+#include <algorithm>
 #include <unordered_set>
 
 #include "velox/core/QueryConfig.h"
+#include "velox/exec/fuzzer/FlinkQueryRunner.h"
 #include "velox/exec/fuzzer/PrestoQueryRunner.h"
 #ifdef VELOX_ENABLE_LOCAL_RUNNER_SERVICE
 #include "velox/exec/fuzzer/VeloxQueryRunner.h"
@@ -62,6 +65,13 @@ DEFINE_string(
     "--velox_runner_url=http://127.0.0.1:9091");
 #endif
 
+DEFINE_string(
+    flink_gateway_url,
+    "",
+    "Flink SQL Gateway REST endpoint. If set, we use Flink as the source of "
+    "truth for the Presto functions. Example: "
+    "--flink_gateway_url=http://127.0.0.1:8083");
+
 DEFINE_uint32(
     req_timeout_ms,
     10000,
@@ -69,6 +79,7 @@ DEFINE_uint32(
     "such as Presto. Example: --req_timeout_ms=2000");
 
 using namespace facebook::velox::exec::test;
+using facebook::velox::exec::test::FlinkQueryRunner;
 using facebook::velox::exec::test::PrestoQueryRunner;
 using facebook::velox::fuzzer::ArgTypesGenerator;
 using facebook::velox::fuzzer::ArgValuesGenerator;
@@ -175,6 +186,14 @@ std::unordered_map<std::string, std::shared_ptr<ArgValuesGenerator>>
 
 const std::unordered_set<std::string> skipFunctionsLocalRunner{};
 
+// Functions skipped on top of prestoSkippedFunctions() and
+// prestoSkippedFunctionsSOT() when Flink is used as the source of truth, for
+// known differences between Presto and Flink semantics.
+const std::unordered_set<std::string> skipFunctionsFlink{};
+
+// A Flink query runs as a batch job, which takes longer than a Presto query.
+constexpr uint32_t kFlinkMinTimeoutMs{60'000};
+
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
 
@@ -197,6 +216,7 @@ int main(int argc, char** argv) {
       facebook::velox::memory::memoryManager()->addRootPool()};
   std::shared_ptr<ReferenceQueryRunner> referenceQueryRunner{nullptr};
   const char* shouldAdjustTimestampToSessionTimezone{"true"};
+  const std::string sessionTimezone{"America/Los_Angeles"};
 
   if (!FLAGS_presto_url.empty()) {
     // Add additional functions to skip since we are now querying Presto
@@ -210,6 +230,30 @@ int main(int argc, char** argv) {
         "expression_fuzzer",
         static_cast<std::chrono::milliseconds>(FLAGS_req_timeout_ms));
     LOG(INFO) << "Using Presto as the reference DB.";
+  } else if (!FLAGS_flink_gateway_url.empty()) {
+    // Flink TIMESTAMP has no timezone, so timestamps are not adjusted to the
+    // session timezone. The session timezone is set as Flink's
+    // 'table.local-time-zone' for the functions that use it.
+    shouldAdjustTimestampToSessionTimezone = "false";
+    for (const auto* skipped :
+         {&prestoSkippedFunctionsSOT(), &skipFunctionsFlink}) {
+      skipFunctions.insert(skipped->begin(), skipped->end());
+    }
+    // Velox casts follow Presto semantics, which differ from Flink's. Leave
+    // 'cast' out unless asked for explicitly.
+    if (gflags::GetCommandLineFlagInfoOrDie("special_forms").is_default) {
+      gflags::SetCommandLineOption(
+          "special_forms", "and,or,coalesce,if,switch");
+    }
+    referenceQueryRunner = std::make_shared<FlinkQueryRunner>(
+        rootPool.get(),
+        FLAGS_flink_gateway_url,
+        std::unordered_map<std::string, std::string>{
+            {facebook::velox::core::QueryConfig::kSessionTimezone,
+             sessionTimezone}},
+        std::chrono::milliseconds(
+            std::max(FLAGS_req_timeout_ms, kFlinkMinTimeoutMs)));
+    LOG(INFO) << "Using Flink as the reference DB.";
 #ifdef VELOX_ENABLE_LOCAL_RUNNER_SERVICE
   } else if (!FLAGS_velox_runner_url.empty()) {
     // LocalRunnerService sets only session_timezone on the reference side, so
@@ -230,8 +274,7 @@ int main(int argc, char** argv) {
       initialSeed,
       skipFunctions,
       exprTransformers,
-      {{facebook::velox::core::QueryConfig::kSessionTimezone,
-        "America/Los_Angeles"},
+      {{facebook::velox::core::QueryConfig::kSessionTimezone, sessionTimezone},
        {facebook::velox::core::QueryConfig::kAdjustTimestampToTimezone,
         shouldAdjustTimestampToSessionTimezone},
        {facebook::velox::core::QueryConfig::kMinRowsForPeeling, "50"}},
